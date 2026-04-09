@@ -11,7 +11,6 @@ import base64
 # ==========================================
 # ⚙️ 核心配置区
 # ==========================================
-dashscope.api_key = "sk-adaae1dafa8c48f18eb268fb09835012"
 
 SYSTEM_PROMPT = "你是一个严格的数据诊断API，只返回格式完美的JSON，不输出任何其他解释性文字。"
 
@@ -72,6 +71,23 @@ def safe_int(val, default=0):
 # ==========================================
 st.set_page_config(page_title="智能数据看板生成器", page_icon="📊", layout="centered")
 st.title("📊 营销诊断看板自动生成器")
+st.divider()
+
+# 1. 创建密码输入框，隐藏输入内容（关键！）
+# 密钥只会存在当前浏览器内存，刷新即清空
+user_api_key = st.text_input(
+    label="请输入你的通义千问 API Key",
+    type="password",  # 隐藏输入，显示为******
+    placeholder="sk-xxxxxxxxxxxxxxxxxxxx"
+)
+
+# 2. 判断：如果用户输入了Key，才配置SDK
+if user_api_key:
+    dashscope.api_key = user_api_key  # 临时赋值，内存中使用
+    st.success("✅ API Key 验证成功，可以使用功能啦！")
+else:
+    st.warning("⚠️ 请输入API Key后再使用功能")
+    st.stop()  # 没有输入Key，直接停止运行后续代码
 
 uploaded_file = st.file_uploader("📂 将 Excel 宽表拖拽到此处", type=["xlsx"])
 
