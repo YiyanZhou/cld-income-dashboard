@@ -207,7 +207,7 @@ if uploaded_file is not None:
 
                     # 4. 生成该年份的 Global (大盘) 数据
                     # 这里为了简化，我们克隆这一年第一个项目作为大盘占位，实际可在此处做全盘汇总计算
-                    year_data_bundle["global"] = year_data_bundle[projects[0]]
+                    year_data_bundle["global"] = year_data_bundle['重庆来福士广场']
                     year_data_bundle["global"]["banner"]["headline"] = f"{year}年度全盘营销资产审计报告"
 
                     # 将这一年的成果塞进总库
