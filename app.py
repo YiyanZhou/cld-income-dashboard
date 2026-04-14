@@ -161,10 +161,10 @@ if uploaded_file is not None:
                         # 呼叫 AI 进行单项目诊断                      
                         try:
                             response = Generation.call(
-                                model="qwen-turbo",
+                                model="qwen3.6-plus",
                                 messages=[
                                     {"role": "system", "content": SYSTEM_PROMPT},
-                                    {"role": "user", "content": get_diagnostic_prompt(p_name, p_data)}
+                                    {"role": "user", "content": get_diagnostic_prompt(p_name, {"kpi_raw": p_kpi, "trendData": p_trends}, year, latest_month)}
                                 ],
                                 response_format={"type": "json_object"},
                                 timeout=90  # 增加超时保护
