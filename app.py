@@ -161,7 +161,7 @@ if uploaded_file is not None:
                         # 呼叫 AI 进行单项目诊断                      
                         try:
                             response = Generation.call(
-                                model="qwen3.6-plus",
+                                model="qwen-turbo",
                                 messages=[
                                     {"role": "system", "content": SYSTEM_PROMPT},
                                     {"role": "user", "content": get_diagnostic_prompt(p_name, {"kpi_raw": p_kpi, "trendData": p_trends}, year, latest_month)}
