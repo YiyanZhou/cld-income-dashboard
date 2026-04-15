@@ -226,9 +226,14 @@ if uploaded_file is not None:
             st.subheader("✅ 专属诊断看板")
             # 2. 用markdown渲染按钮样式的跳转链接（模拟Streamlit primary按钮）
             st.components.v1.html(
-                final_html, 
-                height=800,        # 页面高度，可自行调整
-                scrolling=True     # 开启滚动条
+                f"""
+                <div style="width:100%; height:100%;">
+                {final_html}
+                </div>
+                """,
+                height=1000,      # 高度可以调大，适配你的内容
+                scrolling=True,
+                width=1000 
             )
 
 
