@@ -33,6 +33,8 @@
         .ff-a { background: #FFFAEB; border: 1px solid #FEC84B; } .ff-a .ff-val { color: #B54708; }
         .ff-n { background: #FFF; border: 1px solid #D8E6F3; } .ff-n .ff-val { color: #344C6E; }
         .text-red { color: #D92D20; } .text-amber { color: #B54708; } .text-green { color: #027A48; } .text-blue { color: #1549C3; }
+        /* ========== 新增：图表容器样式（关键，避免尺寸为0） ========== */
+        .chart-container { width: 100%; height: 400px; margin: 10px 0; }
     </style>
 </head>
 <body class="p-6 md:p-10 max-w-[1360px] mx-auto">
@@ -67,13 +69,121 @@
             return `<span class="num-font">${val}</span>`;
         }
 
+        // 后端注入的JSON数据
         const db = {{ DATA_DICT_HERE }};
 
-
         // ================= 视图与渲染引擎 =================
-
         let chartTrend1 = null, chartTrend2 = null, chartScatter = null;
 
+        // ========== 改动点2：补全updateProjectsAndSwitch函数（原未定义） ==========
+        function updateProjectsAndSwitch() {
+            const year = document.getElementById('yearSelector').value;
+            // 清空项目下拉框
+            const projectSel = document.getElementById('projectSelector');
+            projectSel.innerHTML = '';
+            // 填充项目选项
+            if (db[year]) {
+                Object.keys(db[year]).forEach(prj => {
+                    const option = document.createElement('option');
+                    option.value = prj;
+                    option.textContent = prj === 'global' ? '总体大盘' : prj;
+                    projectSel.appendChild(option);
+                });
+            }
+            // 触发视图切换
+            switchView();
+        }
+
+        // ========== 改动点3：补全renderGlobalView函数（原未定义） ==========
+        function renderGlobalView(container, data, year) {
+            renderProjectView(container, data, 'global', year); // 大盘和项目视图复用同一渲染逻辑
+        }
+
+        // ========== 改动点4：补全renderProjectView函数（核心渲染逻辑） ==========
+        function renderProjectView(container, data, prj, year) {
+            // 清空容器
+            container.innerHTML = '';
+
+            // 1. 渲染Banner
+            container.innerHTML += generateBanner(data.banner);
+
+            // 2. 渲染KPI模块
+            container.innerHTML += getSectionHeader('WHAT', '核心财务指标');
+            const kpiContainer = document.createElement('div');
+            kpiContainer.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6';
+            data.kpi.forEach(kpi => {
+                kpiContainer.innerHTML += generateKPIHtml(kpi);
+            });
+            container.appendChild(kpiContainer);
+
+            // 3. 渲染漏斗模块
+            container.innerHTML += getSectionHeader('WHAT', '全链路转化漏斗');
+            const funnelContainer = document.createElement('div');
+            funnelContainer.className = 'bg-white rounded-lg p-4 shadow-sm mb-6';
+            funnelContainer.innerHTML += generateFunnel(data.funnel);
+            container.appendChild(funnelContainer);
+
+            // 4. 渲染公式链模块
+            container.innerHTML += getSectionHeader('SO WHAT', '5维公式链诊断');
+            const formulaContainer = document.createElement('div');
+            formulaContainer.className = 'bg-white rounded-lg p-4 shadow-sm mb-6 overflow-x-auto';
+            formulaContainer.innerHTML += generateFormulaChain(data.formulaData);
+            container.appendChild(formulaContainer);
+
+            // 5. 渲染趋势图表1（实收金额趋势）
+            container.innerHTML += getSectionHeader('SO WHAT', '实收金额月度趋势');
+            const chart1Container = document.createElement('div');
+            chart1Container.className = 'chart-container';
+            container.appendChild(chart1Container);
+            // 初始化/更新图表
+            chartTrend1 = echarts.init(chart1Container);
+            const trendOption1 = {
+                title: { text: `${prj === 'global' ? '总体大盘' : prj} - ${year}年实收金额趋势（万元）` },
+                xAxis: { type: 'category', data: data.trendData.months },
+                yAxis: { type: 'value' },
+                series: [
+                    { name: '实际实收', type: 'bar', data: data.trendData.actualCollection },
+                    { name: '计划实收', type: 'line', data: data.trendData.planCollection }
+                ],
+                tooltip: { trigger: 'axis' }
+            };
+            chartTrend1.setOption(trendOption1);
+
+            // 6. 渲染趋势图表2（签约套数趋势）
+            container.innerHTML += getSectionHeader('SO WHAT', '签约套数月度趋势');
+            const chart2Container = document.createElement('div');
+            chart2Container.className = 'chart-container';
+            container.appendChild(chart2Container);
+            // 初始化/更新图表
+            chartTrend2 = echarts.init(chart2Container);
+            const trendOption2 = {
+                title: { text: `${prj === 'global' ? '总体大盘' : prj} - ${year}年签约套数趋势` },
+                xAxis: { type: 'category', data: data.trendData.months },
+                yAxis: { type: 'value' },
+                series: [
+                    { name: '实际签约', type: 'bar', data: data.trendData.actualUnits },
+                    { name: '目标签约', type: 'line', data: data.trendData.targetUnits }
+                ],
+                tooltip: { trigger: 'axis' }
+            };
+            chartTrend2.setOption(trendOption2);
+
+            // 7. 渲染行动建议
+            container.innerHTML += getSectionHeader('NOW WHAT', '行动建议');
+            const actionsContainer = document.createElement('div');
+            actionsContainer.className = 'bg-white rounded-lg p-4 shadow-sm mb-6';
+            data.actions.forEach(action => {
+                actionsContainer.innerHTML += `
+                    <div class="flex gap-3 mb-3 p-2 border-b border-gray-100">
+                        <div class="font-bold text-sm">${action[0]}</div>
+                        <div class="text-xs text-gray-500 w-16">${action[1]}</div>
+                        <div class="font-bold text-sm">${action[2]}</div>
+                        <div class="text-sm flex-1">${action[3]}</div>
+                    </div>
+                `;
+            });
+            container.appendChild(actionsContainer);
+        }
 
         function switchView() {
             const year = document.getElementById('yearSelector').value;
@@ -125,8 +235,7 @@
             } else {
                 renderProjectView(container, data, prj, year);
             }
-
-}
+        }
 
         function getSectionHeader(type, title) {
             const bg = type === 'WHAT' ? 'bg-[#1549C3]' : type === 'SO WHAT' ? 'bg-[#B54708]' : 'bg-[#027A48]';
@@ -163,7 +272,7 @@
             return `<div class="flex items-center justify-between py-4 overflow-x-auto min-w-[600px]">${st(f.s1)}${cn(f.c1)}${st(f.s2)}${cn(f.c2)}${st(f.s3)}${cn(f.c3)}${st(f.s4)}</div>`;
         }
 
-function generateFormulaChain(fd) {
+        function generateFormulaChain(fd) {
             if(!fd) return '';
             
             let leakH = '';
@@ -201,131 +310,45 @@ function generateFormulaChain(fd) {
                 c += `<div class="flex items-center py-2 border-b border-gray-100"><div class="w-16 text-right pr-3 border-r-2 border-gray-200"><div class="text-[10px] font-bold text-gray-500">L4</div><div class="text-[9px] text-gray-400">案场逼定</div></div><div class="px-3 text-gray-400 font-light text-lg">=</div><div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-dashed border-gray-200"><div class="ff-box ${fd.l4_1.style}"><div class="font-black text-[14px] num-font">${fd.l4_1.val}</div><div class="text-[10px] mt-0.5">${fd.l4_1.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l4_1.badge}</div></div><div class="text-gray-400 font-light text-lg">×</div><div class="ff-box ${fd.l4_2.style}"><div class="font-black text-[14px] num-font">${fd.l4_2.val}</div><div class="text-[10px] mt-0.5">${fd.l4_2.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l4_2.badge}</div></div></div>${noteL4}</div>`;
             }
             if(fd.l5_1) {
-                c += `<div class="flex items-center py-2"><div class="w-16 text-right pr-3 border-r-2 border-gray-200"><div class="text-[10px] font-bold text-gray-500">L5</div><div class="text-[9px] text-gray-400">前端引流</div></div><div class="px-3 text-gray-400 font-light text-lg">=</div><div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-dashed border-gray-200"><div class="ff-box ${fd.l5_1.style}"><div class="font-black text-[14px] num-font">${fd.l5_1.val}</div><div class="text-[10px] mt-0.5">${fd.l5_1.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_1.badge}</div></div><div class="text-gray-400 font-light text-lg">×</div><div class="ff-box ${fd.l5_2.style}"><div class="font-black text-[14px] num-font">${fd.l5_2.val}</div><div class="text-[10px] mt-0.5">${fd.l5_2.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_2.badge}</div></div><div class="text-gray-400 font-light text-lg">×</div><div class="ff-box ${fd.l5_3.style}"><div class="font-black text-[14px] num-font">${fd.l5_3.val}</div><div class="text-[10px] mt-0.5">${fd.l5_3.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_3.badge}</div></div></div>${noteL5}</div>`;
+                c += `<div class="flex items-center py-2 border-b border-gray-100"><div class="w-16 text-right pr-3 border-r-2 border-gray-200"><div class="text-[10px] font-bold text-gray-500">L5</div><div class="text-[9px] text-gray-400">漏斗探源</div></div><div class="px-3 text-gray-400 font-light text-lg">=</div><div class="flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-dashed border-gray-200"><div class="ff-box ${fd.l5_1.style}"><div class="font-black text-[14px] num-font">${fd.l5_1.val}</div><div class="text-[10px] mt-0.5">${fd.l5_1.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_1.badge}</div></div><div class="text-gray-400 font-light text-lg">×</div><div class="ff-box ${fd.l5_2.style}"><div class="font-black text-[14px] num-font">${fd.l5_2.val}</div><div class="text-[10px] mt-0.5">${fd.l5_2.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_2.badge}</div></div><div class="text-gray-400 font-light text-lg">×</div><div class="ff-box ${fd.l5_3.style}"><div class="font-black text-[14px] num-font">${fd.l5_3.val}</div><div class="text-[10px] mt-0.5">${fd.l5_3.lbl}</div><div class="text-[9px] mt-1 px-1 rounded bg-white bg-opacity-50">${fd.l5_3.badge}</div></div></div>${noteL5}</div>`;
             }
+            
+            // 补充诊断内容
             c += `</div>`;
-
-            return `
-            <div class="bg-white rounded-[10px] p-6 shadow-sm hover-card mb-[28px]">
-                <div class="flex flex-col lg:flex-row gap-6">
-                    <div class="lg:w-[72%] overflow-x-auto">${c}</div>
-                    <div class="lg:w-[28%] border-t lg:border-t-0 lg:border-l border-gray-200 pt-4 lg:pt-0 lg:pl-8 flex flex-col justify-center">
-                        <div class="text-[15px] font-bold text-[#0D1B33] mb-5 flex items-center"><span class="bg-red-100 text-red-600 px-2 py-1 rounded text-[11px] mr-2">病灶定位</span> 价值漏损账单 (Value Leakage)</div>
-                        ${leakH || '<div class="text-gray-400 text-sm mb-4">— 本项目暂无明确漏洞 —</div>'}
-                        ${levH}
-                    </div>
-                </div>
-            </div>`;
+            if(leakH) c += `<div class="mt-4 border-t border-red-100 pt-4">${leakH}</div>`;
+            if(levH) c += levH;
+            
+            return c;
         }
 
-        // ============ 本次核心放大修改的地方 ============
-        function generateTrendHtml(td) {
-            let ih = '';
-            if(td && td.insights && td.insights.length > 0) { 
-                ih = `
-                <div class="mt-5 bg-[#FFFAEB] border border-[#FEC84B] rounded-[8px] p-5 mx-2">
-                    <div class="text-[14px] font-bold text-[#B54708] mb-3 flex items-center">
-                        <span class="mr-1 text-[16px]">💡</span> 走势异动智能解析
-                    </div>
-                    <ul class="space-y-2">
-                        ${td.insights.map(i => `<li class="text-[13px] text-[#7A2E0E] leading-relaxed relative pl-4 before:content-[''] before:absolute before:left-0 before:top-[7px] before:w-1.5 before:h-1.5 before:bg-[#B54708] before:rounded-full">${i}</li>`).join('')}
-                    </ul>
-                </div>`; 
-            }
-            return `
-            <div class="bg-white rounded-[10px] p-6 shadow-sm hover-card mb-[28px]">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div><div class="text-[12px] font-bold text-[#344C6E] mb-1">资金链：月度回款趋势 (万元)</div><div id="chartTrend1" style="height: 240px; width: 100%;"></div></div>
-                    <div><div class="text-[12px] font-bold text-[#344C6E] mb-1">业务端：月度签约套数 (红绿灯预警)</div><div id="chartTrend2" style="height: 240px; width: 100%;"></div></div>
-                </div>
-                ${ih}
-            </div>`;
-        }
-        // ===============================================
-
-        function generateActionsTable(actions) {
-            let rows = actions.map(a => { let t = a[0].includes('NOW') ? 'text-red' : a[0].includes('NEXT') ? 'text-amber' : 'text-green'; return `<tr class="border-b border-gray-100"><td class="px-4 py-3 text-[11px] font-black ${t} tracking-wide whitespace-nowrap">${a[0]}</td><td class="px-4 py-3 font-bold text-[12px] text-gray-800">${a[1]}</td><td class="px-4 py-3 text-[12px] text-gray-600">${a[2]}</td><td class="px-4 py-3 text-[12px] text-[#344C6E] leading-relaxed">${a[3]}</td></tr>`; }).join('');
-            return `<div class="bg-white rounded-[10px] p-6 shadow-sm border-t-4 border-[#0C1A2E] mb-[40px]"><div class="overflow-x-auto"><table class="min-w-full text-left min-w-[700px]"><thead class="bg-[#EEF3FA] text-[#6B8AAE] text-[11px] font-bold"><tr><th class="px-4 py-2 w-40 rounded-tl">动作时效 (Time-bound)</th><th class="px-4 py-2 w-24">干预层级</th><th class="px-4 py-2 w-48">核心痛点</th><th class="px-4 py-2 rounded-tr">系统干预动作建议</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
-        }
-
-        // ================= 渲染控制与Echarts =================
-        function renderGlobalView(container, data) {
-            container.innerHTML = `${getSectionHeader('WHAT', '大盘核心表现与现状判决')}${generateBanner(data.banner)}<div class="grid grid-cols-1 md:grid-cols-4 gap-[14px] mb-[28px]">${data.kpi.map(item => generateKPIHtml(item)).join('')}</div>${getSectionHeader('SO WHAT', '资产健康度矩阵与红黑榜')}<div class="grid grid-cols-1 lg:grid-cols-3 gap-[14px] mb-[28px]"><div class="lg:col-span-2 bg-white rounded-[10px] p-5 shadow-sm hover-card"><div class="text-[12px] font-bold text-[#344C6E] mb-1">健康度散点矩阵</div><div class="text-[10px] text-[#A0B6CC] mb-2">横轴: 规模权重 · 纵轴: 回款健康度 (50%生死线)</div><div id="mainChart" style="height: 280px; width: 100%;"></div></div><div class="bg-white rounded-[10px] p-5 shadow-sm hover-card flex flex-col justify-between border-t-[3px] border-red-500"><div><div class="flex items-center mb-3 border-b border-gray-100 pb-2"><span class="text-green text-lg mr-2">🏆</span><h3 class="text-[12px] font-bold text-[#0D1B33]">红榜：现金流贡献 TOP</h3></div><ul class="space-y-2 mb-6"><li class="text-[12px] text-[#344C6E] flex justify-between"><span>凯荔花园</span><span class="font-black num-font text-green">92.9%</span></li><li class="text-[12px] text-[#344C6E] flex justify-between"><span>凯德·璟高府</span><span class="font-black num-font text-green">90.0%</span></li></ul><div class="flex items-center mb-3 border-b border-gray-100 pb-2"><span class="text-red text-lg mr-2">🚨</span><h3 class="text-[12px] font-bold text-[#0D1B33]">黑榜：滞回烂账 BOTTOM</h3></div><ul class="space-y-2"><li class="text-[12px] text-[#344C6E] flex justify-between"><span>凯德·淮海壹号</span><span class="font-black num-font text-red">12.1%</span></li><li class="text-[12px] text-[#344C6E] flex justify-between"><span>凯德·麓语</span><span class="font-black num-font text-red">14.4%</span></li><li class="text-[12px] text-[#344C6E] flex justify-between"><span>卓锦园</span><span class="font-black num-font text-red">19.9%</span></li></ul></div></div></div>${getSectionHeader('SO WHAT', '全盘公式推演与漏损账单 (锁定责任)')}${generateFormulaChain(data.formulaData)}${getSectionHeader('SO WHAT', '月度走势与异动雷达 (2025全年)')}${generateTrendHtml(data.trendData)}${getSectionHeader('NOW WHAT', '管理动作与执行时效')}${generateActionsTable(data.actions)}`;
-            setTimeout(() => { initScatterChart(); initTrendCharts(data.trendData); }, 100);
-        }
-
-        function renderProjectView(container, data, projectName) {
-            container.innerHTML = `${getSectionHeader('WHAT', `核心洞察与现状判决 (${projectName})`)}${generateBanner(data.banner)}<div class="grid grid-cols-1 md:grid-cols-4 gap-[14px] mb-[28px]">${data.kpi.map(item => generateKPIHtml(item)).join('')}</div>${getSectionHeader('SO WHAT', '转化漏斗与病灶排查')}<div class="grid grid-cols-1 lg:grid-cols-3 gap-[14px] mb-[28px]"><div class="lg:col-span-2 bg-white rounded-[10px] p-6 shadow-sm hover-card overflow-hidden"><div class="text-[12px] font-bold text-[#344C6E] mb-2">横向流转漏斗与行业对标</div>${generateFunnel(data.funnel)}</div><div class="bg-white rounded-[10px] p-6 shadow-sm hover-card border-t-[3px] border-red-500"><div class="flex items-center mb-4"><span class="bg-[#FEF3F2] text-red border border-[#FDA29B] text-[10px] font-bold px-2 py-0.5 rounded mr-2">🚨 本期风险清单</span></div><ul class="space-y-3">${data.risks.map(risk => `<li class="text-[12px] text-[#344C6E] leading-snug border-b border-gray-50 pb-2">${risk}</li>`).join('')}</ul></div></div>${getSectionHeader('SO WHAT', '业务公式推演与漏损账单 (精算盈亏)')}${generateFormulaChain(data.formulaData)}${getSectionHeader('SO WHAT', '月度走势与异动雷达 (2025全年)')}${generateTrendHtml(data.trendData)}${getSectionHeader('NOW WHAT', '行动指令与督办要求')}${generateActionsTable(data.actions)}`;
-            setTimeout(() => { initTrendCharts(data.trendData); }, 100);
-        }
-
-        function initScatterChart() {
-            if(chartScatter) chartScatter.dispose();
-            chartScatter = echarts.init(document.getElementById('mainChart'));
-            const sData = [ [0, 12.1, '淮海壹号'], [70, 90.0, '璟高府'], [0, 14.4, '麓语'], [23, 77.2, '凯九章'], [11, 92.9, '凯荔花园'], [0, 19.9, '卓锦园'], [43, 59.1, '山海连城'], [3, 29.6, '御锦城'], [32, 45.9, '中新里'], [2, 55.9, '来福士'] ];
-            chartScatter.setOption({ grid: { left: '10%', right: '10%', bottom: '10%', top: '10%' }, tooltip: { formatter: obj => `${obj.value[2]}<br>规模: ${obj.value[0]}<br>回款率: ${obj.value[1]}%` }, xAxis: { type: 'value', name: '当期签约规模', splitLine: { lineStyle: { type: 'dashed', color: '#D8E6F3' } }, axisLabel: { color: '#6B8AAE'} }, yAxis: { type: 'value', name: '应收回款率(%)', splitLine: { lineStyle: { type: 'dashed', color: '#D8E6F3' } }, axisLabel: { color: '#6B8AAE'} }, markLine: { silent: true, lineStyle: { color: '#D92D20', type: 'solid' }, data: [ { yAxis: 50, label: {formatter: '生死线 50%', color: '#D92D20'} } ] }, series: [{ type: 'scatter', symbolSize: 16, itemStyle: { color: '#1549C3', opacity: 0.7 }, data: sData, label: { show: true, formatter: p => p.data[2], position: 'top', fontSize: 10, color: '#344C6E' } }] });
-        }
-
-        function initTrendCharts(tData) {
-            if(chartTrend1) chartTrend1.dispose();
-            if(chartTrend2) chartTrend2.dispose();
-            if(!tData || !tData.months) return;
-            let markLines = [];
-            if(tData.events) { Object.keys(tData.events).forEach(idx => { markLines.push({ xAxis: parseInt(idx)-1, label: { formatter: tData.events[idx], position: 'insideStartTop', color: '#B54708', fontSize: 10, backgroundColor: 'rgba(255,250,235,0.8)', padding: 2 }, lineStyle: { color: '#B54708', type: 'dashed', width: 1.5 } }); }); }
-
-            chartTrend1 = echarts.init(document.getElementById('chartTrend1'));
-            chartTrend1.setOption({ grid: { top: 30, bottom: 25, left: 45, right: 15 }, tooltip: { trigger: 'axis' }, xAxis: { type: 'category', data: tData.months, axisLine: { lineStyle: { color: '#D8E6F3' } }, axisLabel: { color: '#6B8AAE', fontSize: 10 } }, yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#EEF3FA' } }, axisLabel: { color: '#6B8AAE', fontSize: 10 } }, series: [ { name: '实际实收', type: 'line', data: tData.actualCollection, symbol: 'circle', symbolSize: 6, itemStyle: { color: '#D92D20' }, lineStyle: { width: 2.5 }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(217,45,32,0.15)'}, {offset: 1, color: 'rgba(217,45,32,0)'}]) }, markLine: { symbol: ['none', 'none'], data: markLines } }, { name: '计划回款', type: 'line', data: tData.planCollection, symbol: 'none', itemStyle: { color: '#1549C3' }, lineStyle: { width: 1.5, type: 'dashed', opacity: 0.5 } } ] });
-
-            chartTrend2 = echarts.init(document.getElementById('chartTrend2'));
-            chartTrend2.setOption({ grid: { top: 30, bottom: 25, left: 35, right: 15 }, tooltip: { trigger: 'axis' }, xAxis: { type: 'category', data: tData.months, axisLine: { lineStyle: { color: '#D8E6F3' } }, axisLabel: { color: '#6B8AAE', fontSize: 10 } }, yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#EEF3FA' } }, axisLabel: { color: '#6B8AAE', fontSize: 10 } }, series: [ { name: '签约套数', type: 'bar', data: tData.actualUnits, barWidth: '40%', itemStyle: { borderRadius: [3, 3, 0, 0], color: function(params) { let val = params.value; let target = tData.targetUnits[params.dataIndex]; if (val < 0) return '#D92D20'; else if (val >= target) return '#027A48'; else return '#B54708'; } }, markLine: { symbol: ['none', 'none'], data: markLines } }, { name: '目标套数', type: 'line', data: tData.targetUnits, symbol: 'none', itemStyle: { color: '#6B8AAE' }, lineStyle: { width: 1, type: 'dashed', opacity: 0.4 } } ] });
-        }
-
+        // ========== 改动点5：页面初始化逻辑（核心！自动填充下拉框+触发渲染） ==========
         window.onload = function() {
-    // 安全检查
-    if (!db || Object.keys(db).length === 0) {
-        document.getElementById('dashboardContent').innerHTML = '<div class="text-center py-20 text-red-500">🚨 数据注入失败，请检查 Python 后台</div>';
-        return;
-    }
-
-    const yearSelector = document.getElementById('yearSelector');
-    // 获取所有年份并排序
-    const years = Object.keys(db).sort((a, b) => b - a);
-
-    years.forEach(y => {
-        let opt = document.createElement('option');
-        opt.value = y;
-        opt.innerHTML = y + "年度";
-        yearSelector.appendChild(opt);
-    });
-
-    // 第一次运行：填充项目列表并显示大盘
-    updateProjectsAndSwitch();
-};
-
-// 2. 核心联动：根据选中的年份，动态更新项目下拉框的选项
-function updateProjectsAndSwitch() {
-    const year = document.getElementById('yearSelector').value;
-    const projectSelector = document.getElementById('projectSelector');
-
-    // 清空现有项目，只保留总体大盘
-    projectSelector.innerHTML = '<option value="global" selected>总体大盘 (全盘汇总)</option>';
-
-    if (db[year]) {
-        // 找到这一年里所有的项目名字
-        const projects = Object.keys(db[year]);
-        projects.forEach(p => {
-            if (p !== 'global') {
-                let opt = document.createElement('option');
-                opt.value = p;
-                opt.innerHTML = p;
-                projectSelector.appendChild(opt);
+            // 1. 校验数据是否存在
+            if (!db || Object.keys(db).length === 0) {
+                document.getElementById('dashboardContent').innerHTML = '<div class="text-center text-red font-bold py-10">❌ 未加载到有效数据，请检查数据源</div>';
+                return;
             }
-        });
-    }
-    // 更新完项目名单后，刷新看板内容
-    switchView();
-}
-        window.addEventListener('resize', function() { if(chartTrend1) chartTrend1.resize(); if(chartTrend2) chartTrend2.resize(); if(chartScatter) chartScatter.resize(); });
+            // 2. 填充年份下拉框
+            const yearSel = document.getElementById('yearSelector');
+            const years = Object.keys(db);
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year + '年';
+                yearSel.appendChild(option);
+            });
+            // 3. 自动选中第一个年份，并填充项目下拉框
+            if (years.length > 0) {
+                yearSel.value = years[0];
+                updateProjectsAndSwitch();
+            }
+            // 4. 监听窗口大小变化，自适应图表
+            window.addEventListener('resize', function() {
+                if (chartTrend1) chartTrend1.resize();
+                if (chartTrend2) chartTrend2.resize();
+                if (chartScatter) chartScatter.resize();
+            });
+        };
     </script>
 </body>
 </html>
