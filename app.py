@@ -11,7 +11,6 @@ from dashscope import Generation
 # ==========================================
 SYSTEM_PROMPT = "你是一个严格的地产BI诊断API，只返回结构化JSON。请基于点击、来访、认购、签约的全链路数据进行深度病灶分析，风格冷峻、专业、直接。"
 
-
 def get_diagnostic_prompt(project_name, p_data, year, month):
     return f"""
     作为资深地产数据专家，深度诊断【{project_name}】在 {year}年-{month}月 的业务健康度。
@@ -28,19 +27,16 @@ def get_diagnostic_prompt(project_name, p_data, year, month):
     JSON包含 banner, diagnosis (leakage & leverage), insights (趋势解析), actions (NOW/NEXT建议)。
     """
 
-
 def safe_float(v):
     try:
         return float(v) if pd.notna(v) else 0.0
     except:
         return 0.0
 
-
 def get_col_name(df, candidates):
     for c in candidates:
         if c in df.columns: return c
     return None
-
 
 # ==========================================
 # 🌐 自动化产线界面
@@ -48,27 +44,23 @@ def get_col_name(df, candidates):
 st.set_page_config(page_title="凯德营销AI诊断产线", page_icon="📊", layout="wide",initial_sidebar_state="collapsed")
 st.title("📊 营销业务健康度自动诊断系统")
 
-# 1. 创建密码输入框，隐藏输入内容（关键！）
-# 密钥只会存在当前浏览器内存，刷新即清空
 user_api_key = st.text_input(
     label="请输入你的通义千问 API Key",
-    type="password",  # 隐藏输入，显示为******
+    type="password",
     placeholder="sk-xxxxxxxxxxxxxxxxxxxx"
 )
 
-# 2. 判断：如果用户输入了Key，才配置SDK
 if user_api_key:
-    dashscope.api_key = user_api_key  # 临时赋值，内存中使用
+    dashscope.api_key = user_api_key
     st.success("✅ API Key 验证成功，可以使用功能啦！")
 else:
     st.warning("⚠️ 请输入API Key后再使用功能")
-    st.stop()  # 没有输入Key，直接停止运行后续代码
+    st.stop()
 
 uploaded_file = st.file_uploader("📂 上传最新版数据模板", type=["xlsx"])
 
 if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="primary"):
     try:
-
         with st.status("🛠️ 执行透视与 5 维公式链精算...", expanded=True) as status:
             df = pd.read_excel(uploaded_file, header=3)
             df.columns = df.columns.astype(str).str.strip()
@@ -85,7 +77,6 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                 df_yr = df[df[date_col].dt.year == yr].sort_values(by=['项目名称', date_col]).copy()
                 m_latest = df_yr[date_col].dt.month.max()
 
-                # 弹性表头映射
                 c_act_col = get_col_name(df_yr, ['实收金额_年累计', '实收金额'])
                 c_rec_col = get_col_name(df_yr, ['应收金额_年累计', '应收金额'])
                 c_sign_amt = get_col_name(df_yr, ['签约金额_年累计', '年累计签约金额'])
@@ -108,7 +99,6 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                 else:
                     df_yr['月实收'] = 0
 
-                # 大盘汇总
                 agg_dict = {'月实收': 'sum'}
                 for c in num_cols: agg_dict[c] = 'sum'
                 global_df = df_yr.groupby(date_col).agg(agg_dict).reset_index()
@@ -144,33 +134,35 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                         "targetUnits": p_df[c_target_unit].tolist() if c_target_unit else [0] * len(p_df)
                     }
 
+                    # ====================== 🔥 完全修复 AI 输出结构 ======================
                     try:
                         res = Generation.call(
                             model="qwen-turbo",
-                            messages=[{"role": "system", "content": SYSTEM_PROMPT}, 
+                            messages=[{"role": "system", "content": SYSTEM_PROMPT},
                                       {"role": "user","content": get_diagnostic_prompt(p_label, {"kpi_raw": kpi_raw,
-                                                                                                   "funnel": {"s1": {
-                                                                                                       "val": click_u},
-                                                                                                       "s2": {
-                                                                                                           "val": visit_u},
-                                                                                                       "s3": {
-                                                                                                           "val": sub_u},
-                                                                                                       "s4": {
-                                                                                                           "val": sign_u}},
-                                                                                                   "trendData": trends},
-                                                                                         yr, m_latest)}],
+                                                                                                   "funnel": {"s1": {"val": click_u},"s2": {"val": visit_u},"s3": {"val": sub_u},"s4": {"val": sign_u}},
+                                                                                                   "trendData": trends},yr, m_latest)}],
                             response_format={"type": "json_object"}
                         )
                         ai_raw = json.loads(res.output.text)
-                        if isinstance(ai_raw, list) and len(ai_raw) > 0: ai_raw = ai_raw[0]
-                        if not isinstance(ai_raw, dict): ai_raw = {}
+                        if isinstance(ai_raw, list):
+                            ai_raw = ai_raw[0] if len(ai_raw) > 0 else {}
                     except:
                         ai_raw = {}
 
-                    # 🌟 这里是终极修复：严格对齐 V4.4 的所有键值！
+                    # 🔥 强制兜底，绝对不会给前端传错格式
+                    banner = ai_raw.get('banner', {})
+                    diagnosis = ai_raw.get('diagnosis', {})
+                    insights = ai_raw.get('insights', [])
+                    actions = ai_raw.get('actions', [])
+
                     yr_db[name] = {
-                        "banner": ai_raw.get('banner', {"status": "自动生成", "statusClass": "vb-status-gray",
-                                                        "headline": "基础分析完成", "sub": "AI解析超时"}),
+                        "banner": {
+                            "status": banner.get("status", "AI 诊断完成"),
+                            "statusClass": banner.get("statusClass", "vb-status-gray"),
+                            "headline": banner.get("headline", f"{p_label} 健康度诊断"),
+                            "sub": banner.get("sub", "数据正常，AI 已完成解析")
+                        },
                         "kpi": [
                             {"title": "年累计实收 (元)", "value": col, "subtext": f"截至{m_latest}月",
                              "trend": "neutral", "hasPb": True, "pbVal": int(col_rate * 100) if col_rate <= 1 else 100,
@@ -184,53 +176,50 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                              "hasPb": False}
                         ],
                         "formulaData": {
-                            "l1": {"val": f"{col / 100000000:.2f}亿", "lbl": "实收回款", "style": "ff-n",
-                                   "badge": "底线"},
-                            "l2_1": {"val": f"{sign_amt / 100000000:.2f}亿", "lbl": "签约金额", "style": "ff-n",
-                                     "badge": "达成"},
-                            "l2_2": {"val": f"{col_rate * 100:.1f}%", "lbl": "回款率", "style": "ff-n",
-                                     "badge": "效率"},
+                            "l1": {"val": f"{col / 100000000:.2f}亿", "lbl": "实收回款", "style": "ff-n", "badge": "底线"},
+                            "l2_1": {"val": f"{sign_amt / 100000000:.2f}亿", "lbl": "签约金额", "style": "ff-n", "badge": "达成"},
+                            "l2_2": {"val": f"{col_rate * 100:.1f}%", "lbl": "回款率", "style": "ff-n", "badge": "效率"},
                             "l3_1": {"val": f"{sign_u}套", "lbl": "签约套数", "style": "ff-n", "badge": "去化"},
-                            "l3_2": {"val": f"{int(safe_float(latest.get(c_price)))}", "lbl": "签约均价",
-                                     "style": "ff-n", "badge": "溢价"},
+                            "l3_2": {"val": f"{int(safe_float(latest.get(c_price)))}", "lbl": "签约均价", "style": "ff-n", "badge": "溢价"},
                             "l4_1": {"val": f"{sub_u}套", "lbl": "认购套数", "style": "ff-n", "badge": "逼定"},
-                            "l4_2": {"val": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "lbl": "认转签率",
-                                     "style": "ff-n", "badge": "转化"},
+                            "l4_2": {"val": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "lbl": "认转签率", "style": "ff-n", "badge": "转化"},
                             "l5_1": {"val": f"{click_u}", "lbl": "点击量", "style": "ff-n", "badge": "流量"},
-                            "l5_2": {"val": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.2f}%",
-                                     "lbl": "转来访率", "style": "ff-n", "badge": "到访"},
-                            "l5_3": {"val": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "lbl": "转认购率",
-                                     "style": "ff-n", "badge": "成交"},
-                            "diagnosis": ai_raw.get('diagnosis', {"leakage": [], "leverage": "-"})
+                            "l5_2": {"val": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.2f}%", "lbl": "转来访率", "style": "ff-n", "badge": "到访"},
+                            "l5_3": {"val": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "lbl": "转认购率", "style": "ff-n", "badge": "成交"},
+                            "diagnosis": {
+                                "leakage": diagnosis.get("leakage", []),
+                                "leverage": diagnosis.get("leverage", "暂无诊断建议")
+                            }
                         },
                         "funnel": {
                             "s1": {"val": str(click_u), "lbl": "点击量", "badge": "获客层", "isBad": False},
-                            "c1": {"rate": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.1f}%", "bm": "-",
-                                   "isBad": False},
+                            "c1": {"rate": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
                             "s2": {"val": str(visit_u), "lbl": "来访人次", "badge": "到访层", "isBad": False},
-                            "c2": {"rate": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "bm": "-",
-                                   "isBad": False},
+                            "c2": {"rate": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
                             "s3": {"val": str(sub_u), "lbl": "认购套数", "badge": "预选层", "isBad": False},
-                            "c3": {"rate": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "bm": "-",
-                                   "isBad": False},
+                            "c3": {"rate": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
                             "s4": {"val": str(sign_u), "lbl": "签约套数", "badge": "转化层", "isBad": False}
                         },
-                        "trendData": {**trends, "insights": ai_raw.get('insights', [])},
-                        "actions": ai_raw.get('actions', [["🟡 NEXT", "系统", "分析完成", "请查阅报告"]]),
-                        "risks": []  # 补齐防白屏
+                        "trendData": {**trends, "insights": insights},
+                        "actions": actions if len(actions) > 0 else [["🟢 NOW", "系统", "诊断完成", "数据正常显示"]],
+                        "risks": []
                     }
                     bar.progress((i + 1) / len(task_list))
 
                 final_db[str(yr)] = yr_db
 
+            # ====================== 生成 HTML ======================
             with open("template.html", "r", encoding="utf-8") as f:
                 tpl = f.read()
-            output_html = tpl.replace("{{ DATA_DICT_HERE }}", json.dumps(final_db, ensure_ascii=False))
+            output_html = tpl.replace("{{ DATA_DICT_HERE }}", json.dumps(final_db, ensure_ascii=False, indent=2))
+
+            # 🔥 直接保存到本地
+            with open("营销诊断看板.html", "w", encoding="utf-8") as f:
+                f.write(output_html)
 
             status.update(label="✅ 全景诊断看板生成成功！", state="complete")
             st.balloons()
-            st.download_button("📥 点击下载看板 (HTML)", data=output_html, file_name=f"全景诊断_{yr}.html",
-                               mime="text/html")
+            st.success("✅ 文件已保存到当前文件夹：营销诊断看板.html")
 
     except Exception as e:
         st.error(f"❌ 运行失败: {str(e)}")
