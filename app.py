@@ -233,13 +233,10 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                 tpl = f.read()
             output_html = tpl.replace("{{ DATA_DICT_HERE }}", json.dumps(final_db, ensure_ascii=False, indent=2))
 
-            # 🔥 直接保存到本地
-            with open("营销诊断看板.html", "w", encoding="utf-8") as f:
-                f.write(output_html)
-
             status.update(label="✅ 全景诊断看板生成成功！", state="complete")
             st.balloons()
-            st.success("✅ 文件已保存到当前文件夹：营销诊断看板.html")
+            st.download_button("📥 点击下载看板 (HTML)", data=output_html, file_name=f"全景诊断_{yr}.html",
+                               mime="text/html")
 
     except Exception as e:
         st.error(f"❌ 运行失败: {str(e)}")
