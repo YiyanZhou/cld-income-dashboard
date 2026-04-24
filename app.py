@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import json
-import os
 import traceback
 import dashscope
 from dashscope import Generation
@@ -134,7 +133,8 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                         "targetUnits": p_df[c_target_unit].tolist() if c_target_unit else [0] * len(p_df)
                     }
 
-                    # ====================== 🔥 完全修复 AI 输出结构 ======================
+                    # ====================== 🔥 修复：AI 输出双重校验 ======================
+                    ai_raw = {}
                     try:
                         res = Generation.call(
                             model="qwen-turbo",
@@ -144,17 +144,37 @@ if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="prim
                                                                                                    "trendData": trends},yr, m_latest)}],
                             response_format={"type": "json_object"}
                         )
-                        ai_raw = json.loads(res.output.text)
-                        if isinstance(ai_raw, list):
-                            ai_raw = ai_raw[0] if len(ai_raw) > 0 else {}
-                    except:
+                        text = res.output.text
+                        # 尝试解析JSON
+                        parsed = json.loads(text)
+                        if isinstance(parsed, dict):
+                            ai_raw = parsed
+                        elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+                            ai_raw = parsed[0]
+                        else:
+                            # 解析成功但不是对象，重置为空
+                            ai_raw = {}
+                    except Exception as e:
+                        st.warning(f"⚠️ {p_label} AI解析失败，使用默认数据")
                         ai_raw = {}
 
-                    # 🔥 强制兜底，绝对不会给前端传错格式
+                    # 🔥 强制兜底：不管ai_raw是什么类型，都转成字典
+                    if not isinstance(ai_raw, dict):
+                        ai_raw = {}
+
+                    # 🔥 强制字段兜底，100%不会报错
                     banner = ai_raw.get('banner', {})
+                    if not isinstance(banner, dict):
+                        banner = {}
                     diagnosis = ai_raw.get('diagnosis', {})
+                    if not isinstance(diagnosis, dict):
+                        diagnosis = {}
                     insights = ai_raw.get('insights', [])
+                    if not isinstance(insights, list):
+                        insights = []
                     actions = ai_raw.get('actions', [])
+                    if not isinstance(actions, list):
+                        actions = []
 
                     yr_db[name] = {
                         "banner": {
