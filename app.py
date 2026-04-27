@@ -217,7 +217,7 @@ if st.session_state.get('processed'):
                 # 先修改模板中的解析方式
                 rendered = template.replace(
                     "const DATA=JSON.parse('{{DATA_JSON}}');",
-                    "const DATA=JSON.parse(atob('{{DATA_JSON}}'));"
+                    "const DATA=JSON.parse(decodeURIComponent(escape(atob('{{DATA_JSON}}'))));"
                 )
                 # 再替换数据占位符
                 rendered = rendered.replace('{{DATA_JSON}}', data_b64)
@@ -228,7 +228,7 @@ if st.session_state.get('processed'):
                     # 先修改模板中的解析方式
                     rendered = rendered.replace(
                         "const LLM=JSON.parse('{{LLM_ANALYSIS}}');",
-                        "const LLM=JSON.parse(atob('{{LLM_ANALYSIS}}'));"
+                        "const LLM=JSON.parse(decodeURIComponent(escape(atob('{{LLM_ANALYSIS}}'))));"
                     )
                     # 再替换数据占位符
                     rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_b64)
