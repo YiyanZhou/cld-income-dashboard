@@ -204,13 +204,13 @@ if st.session_state.get('processed'):
                 with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
                     template = f.read()
                 
-                # 清理 JSON 字符串中的控制字符
+                # 清理 JSON 字符串
                 def clean_json(obj):
                     json_str = json.dumps(obj, ensure_ascii=False)
+                    # 处理 NaN 和 Infinity - JavaScript JSON.parse 不支持这些值
                     json_str = json_str.replace('NaN', 'null').replace('Infinity', 'null').replace('-Infinity', 'null')
-                    # 移除控制字符（换行、制表等）
-                    import re
-                    json_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', json_str)
+                    # 转义换行符为 \\n，防止 JavaScript 解析错误
+                    json_str = json_str.replace('\n', '\\n').replace('\r', '\\r')
                     return json_str
                 
                 # 替换数据占位符
