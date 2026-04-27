@@ -204,16 +204,22 @@ if st.session_state.get('processed'):
                 with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
                     template = f.read()
                 
+                # 清理 JSON 字符串中的控制字符
+                def clean_json(obj):
+                    json_str = json.dumps(obj, ensure_ascii=False)
+                    json_str = json_str.replace('NaN', 'null').replace('Infinity', 'null').replace('-Infinity', 'null')
+                    # 移除控制字符（换行、制表等）
+                    import re
+                    json_str = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', json_str)
+                    return json_str
+                
                 # 替换数据占位符
-                data_json = json.dumps(data, ensure_ascii=False)
-                # 处理 NaN 和 Infinity - JavaScript JSON.parse 不支持这些值
-                data_json = data_json.replace('NaN', 'null').replace('Infinity', 'null').replace('-Infinity', 'null')
+                data_json = clean_json(data)
                 rendered = template.replace('{{DATA_JSON}}', data_json)
                 
                 # 替换 LLM 分析占位符
                 if analysis:
-                    analysis_json = json.dumps(analysis, ensure_ascii=False)
-                    analysis_json = analysis_json.replace('NaN', 'null').replace('Infinity', 'null').replace('-Infinity', 'null')
+                    analysis_json = clean_json(analysis)
                     rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_json)
                     # 启用 LLM 模式标志
                     rendered = rendered.replace('const USE_LLM=false', 'const USE_LLM=true')
