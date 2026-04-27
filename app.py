@@ -1,243 +1,287 @@
+"""
+销售业务健康度分析仪表盘 - Streamlit 交互应用
+
+启动: streamlit run app.py
+"""
+
 import streamlit as st
-import pandas as pd
+import os
+import tempfile
+import base64
 import json
-import traceback
-import dashscope
-from dashscope import Generation
+from pathlib import Path
 
-# ==========================================
-# ⚙️ 核心配置区
-# ==========================================
-SYSTEM_PROMPT = "你是一个严格的地产BI诊断API，只返回结构化JSON。请基于点击、来访、认购、签约的全链路数据进行深度病灶分析，风格冷峻、专业、直接。"
+from render_dashboard import process_excel, render_dashboard
+from llm_analysis import generate_all_analyses, DEFAULT_MODEL
 
-def get_diagnostic_prompt(project_name, p_data, year, month):
-    return f"""
-    作为资深地产数据专家，深度诊断【{project_name}】在 {year}年-{month}月 的业务健康度。
-
-    【全链路漏斗】：
-    点击量{p_data['funnel']['s1']['val']} -> 来访{p_data['funnel']['s2']['val']} -> 认购{p_data['funnel']['s3']['val']} -> 签约{p_data['funnel']['s4']['val']}
-
-    【财务硬指标】：
-    - 年累计实收：{p_data['kpi_raw']['collection']} 元
-    - 综合回款率：{p_data['kpi_raw']['col_rate'] * 100:.2f}%
-    - 年累计签约金额：{p_data['kpi_raw']['sign_amt']} 元
-
-    输出要求：
-    JSON包含 banner, diagnosis (leakage & leverage), insights (趋势解析), actions (NOW/NEXT建议)。
-    """
-
-def safe_float(v):
-    try:
-        return float(v) if pd.notna(v) else 0.0
-    except:
-        return 0.0
-
-def get_col_name(df, candidates):
-    for c in candidates:
-        if c in df.columns: return c
-    return None
-
-# ==========================================
-# 🌐 自动化产线界面
-# ==========================================
-st.set_page_config(page_title="凯德营销AI诊断产线", page_icon="📊", layout="wide",initial_sidebar_state="collapsed")
-st.title("📊 营销业务健康度自动诊断系统")
-
-user_api_key = st.text_input(
-    label="请输入你的通义千问 API Key",
-    type="password",
-    placeholder="sk-xxxxxxxxxxxxxxxxxxxx"
+# ============ 页面配置 ============
+st.set_page_config(
+    page_title="销售业务健康度仪表盘",
+    page_icon="📊",
+    layout="wide",
 )
 
-if user_api_key:
-    dashscope.api_key = user_api_key
-    st.success("✅ API Key 验证成功，可以使用功能啦！")
-else:
-    st.warning("⚠️ 请输入API Key后再使用功能")
-    st.stop()
+# ============ 样式 ============
+st.markdown("""
+<style>
+.main-header {
+    text-align: center;
+    padding: 2rem 0;
+    background: linear-gradient(135deg, #1a1d27 0%, #2d1b69 100%);
+    border-radius: 16px;
+    color: white;
+    margin-bottom: 2rem;
+}
+.main-header h1 { font-size: 2.2rem; margin-bottom: 0.5rem; }
+.main-header p { color: #8b8fa3; font-size: 1rem; }
+.step-box {
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 1px solid #2a2e3a;
+    background: #1a1d27;
+    margin-bottom: 1.5rem;
+}
+.step-box h3 { color: #6c5ce1; margin-bottom: 1rem; }
+</style>
+""", unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader("📂 上传最新版数据模板", type=["xlsx"])
+# ============ 头部 ============
+st.markdown("""
+<div class="main-header">
+    <h1>📊 销售业务健康度分析仪表盘</h1>
+    <p>上传Excel数据 → 自动计算 → LLM智能分析 → 生成交互式仪表盘</p>
+</div>
+""", unsafe_allow_html=True)
 
-if uploaded_file and st.button("🚀 开始全量跨年诊断分析", type="primary"):
-    try:
-        with st.status("🛠️ 执行透视与 5 维公式链精算...", expanded=True) as status:
-            df = pd.read_excel(uploaded_file, header=3)
-            df.columns = df.columns.astype(str).str.strip()
+# ============ 侧边栏：API Key 设置 ============
+with st.sidebar:
+    st.header("⚙️ 设置")
+    
+    # DashScope API Key
+    st.subheader("🔑 LLM 配置")
+    api_key = st.text_input(
+        "DashScope API Key",
+        type="password",
+        placeholder="sk-xxxxxxxxxxxxxxxx",
+        help="阿里百炼 DashScope API Key，以 sk- 开头"
+    )
+    
+    if api_key:
+        if api_key.startswith("sk-"):
+            st.success("✅ API Key 格式正确")
+        else:
+            st.error("❌ API Key 应以 sk- 开头")
+    
+    model = st.text_input(
+        "模型",
+        value=DEFAULT_MODEL,
+        help="默认 qwen-plus（qwen3.6），也可用 qwen-turbo 等"
+    )
+    
+    st.divider()
+    
+    # 模板路径
+    template_dir = Path(__file__).parent
+    template_file = st.text_input(
+        "模板文件",
+        value=str(template_dir / "dashboard_template.html"),
+        help="HTML模板文件路径"
+    )
+    st.caption("模板应包含 `{{DATA_JSON}}` 和 `{{LLM_ANALYSIS}}` 占位符")
 
-            date_col = '日期_年月' if '日期_年月' in df.columns else '日期'
-            df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
-            df = df.dropna(subset=[date_col, '项目名称'])
+# ============ Session State 初始化 ============
+if 'data' not in st.session_state:
+    st.session_state['data'] = None
+if 'html' not in st.session_state:
+    st.session_state['html'] = None
+if 'analysis' not in st.session_state:
+    st.session_state['analysis'] = None
+if 'processed' not in st.session_state:
+    st.session_state['processed'] = False
 
-            years = sorted(df[date_col].dt.year.unique().astype(int).tolist(), reverse=True)
-            final_db = {}
+# ============ 步骤1: 上传Excel ============
+st.markdown('<div class="step-box">', unsafe_allow_html=True)
+st.header("📁 步骤1：上传Excel数据")
+uploaded_file = st.file_uploader(
+    "选择Excel文件（.xlsx）",
+    type=['xlsx'],
+    help="文件应包含项目名称、日期、签约金额、实收金额、应收金额等列"
+)
+st.markdown('</div>', unsafe_allow_html=True)
 
-            for yr in years:
-                st.write(f"📅 正在处理 {yr} 年度数据...")
-                df_yr = df[df[date_col].dt.year == yr].sort_values(by=['项目名称', date_col]).copy()
-                m_latest = df_yr[date_col].dt.month.max()
+# ============ 步骤2: 处理数据 ============
+st.markdown('<div class="step-box">', unsafe_allow_html=True)
+st.header("⚡ 步骤2：处理数据")
 
-                c_act_col = get_col_name(df_yr, ['实收金额_年累计', '实收金额'])
-                c_rec_col = get_col_name(df_yr, ['应收金额_年累计', '应收金额'])
-                c_sign_amt = get_col_name(df_yr, ['签约金额_年累计', '年累计签约金额'])
-                c_sign_unit = get_col_name(df_yr, ['签约套数_年累计', '年累计签约套数'])
-                c_sub_unit = get_col_name(df_yr, ['认购套数_年累计', '年累计认购套数'])
-                c_visit = get_col_name(df_yr, ['来访人次_年累计', '年累计来访人次'])
-                c_click = get_col_name(df_yr, ['点击量_年累计', '年累计点击量'])
-                c_price = get_col_name(df_yr, ['签约均价年累计', '年累计签约均价'])
-                c_month_unit = get_col_name(df_yr, ['签约套数_月累计', '当月签约套数'])
-                c_target_unit = get_col_name(df_yr, ['目标签约套数', '当月目标签约套数'])
-                c_plan_col = get_col_name(df_yr, ['计划应收金额_年累计', '计划实收金额_年累计'])
+if uploaded_file is not None:
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📄 文件信息")
+        st.write(f"**文件名：** {uploaded_file.name}")
+        st.write(f"**大小：** {uploaded_file.size / 1024:.1f} KB")
+    
+    calc_btn = st.button("🔢 计算数据指标", type="primary", use_container_width=True)
+    
+    if calc_btn:
+        with st.spinner("正在处理数据..."):
+            try:
+                # 保存上传文件到临时路径
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                    tmp.write(uploaded_file.getvalue())
+                    tmp_path = tmp.name
+                
+                # 处理Excel数据
+                data = process_excel(tmp_path)
+                os.unlink(tmp_path)
+                
+                st.session_state['data'] = data
+                st.session_state['processed'] = True
+                
+                t = data['totals']
+                st.success(f"✅ 数据处理完成！共 {len(data['projects'])} 个项目")
+                
+                # 显示数据摘要
+                st.subheader("📋 数据摘要")
+                col_a, col_b, col_c, col_d = st.columns(4)
+                with col_a:
+                    st.metric("签约总额", f"¥{t['qy_amount']/1e4:.0f}万")
+                with col_b:
+                    st.metric("实收总额", f"¥{t['sh_amount']/1e4:.0f}万")
+                with col_c:
+                    st.metric("回款率", f"{t['collection_ratio']*100:.1f}%")
+                with col_d:
+                    st.metric("应收未回款", f"¥{t['unpaid']/1e4:.0f}万")
+                
+            except Exception as e:
+                st.error(f"❌ 处理失败: {str(e)}")
+                st.exception(e)
 
-                num_cols = [c for c in
-                            [c_act_col, c_rec_col, c_sign_amt, c_sign_unit, c_sub_unit, c_visit, c_click, c_price,
-                             c_month_unit, c_target_unit, c_plan_col] if c]
-                for c in num_cols: df_yr[c] = pd.to_numeric(df_yr[c], errors='coerce').fillna(0)
+st.markdown('</div>', unsafe_allow_html=True)
 
-                if c_act_col:
-                    df_yr['月实收'] = df_yr.groupby('项目名称')[c_act_col].diff().fillna(df_yr[c_act_col])
+# ============ 步骤3: LLM 智能分析 ============
+if st.session_state.get('processed'):
+    st.markdown('<div class="step-box">', unsafe_allow_html=True)
+    st.header("🤖 步骤3：LLM 智能分析（可选）")
+    
+    if not api_key:
+        st.info("💡 请输入 DashScope API Key 以启用 LLM 智能分析。不启用则使用内置的规则分析。")
+        use_llm = False
+    else:
+        use_llm = st.checkbox("启用 LLM 智能分析（使用 DashScope 生成分析结论）", value=True)
+    
+    if use_llm and api_key:
+        llm_btn = st.button("🧠 调用 LLM 分析数据", type="primary", use_container_width=True)
+        
+        if llm_btn:
+            with st.spinner(f"正在调用 {model} 分析数据，请稍候..."):
+                try:
+                    analysis = generate_all_analyses(
+                        api_key=api_key,
+                        data=st.session_state['data'],
+                        model=model
+                    )
+                    st.session_state['analysis'] = analysis
+                    
+                    st.success("✅ LLM 分析完成！")
+                    
+                    # 显示分析预览
+                    with st.expander("👁️ 预览 LLM 分析结论"):
+                        for key, val in analysis.items():
+                            st.markdown(f"**{key}:**")
+                            st.markdown(val)
+                            st.divider()
+                    
+                except Exception as e:
+                    st.error(f"❌ LLM 调用失败: {str(e)}")
+                    st.session_state['analysis'] = None
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # ============ 步骤4: 生成仪表盘 ============
+    st.markdown('<div class="step-box">', unsafe_allow_html=True)
+    st.header("🎨 步骤4：生成仪表盘")
+    
+    generate_btn = st.button("🚀 生成仪表盘", type="primary", use_container_width=True)
+    
+    if generate_btn:
+        data = st.session_state['data']
+        analysis = st.session_state.get('analysis')
+        
+        with st.spinner("正在渲染仪表盘..."):
+            try:
+                template_path = template_file
+                if not os.path.exists(template_path):
+                    st.error(f"❌ 模板文件不存在: {template_path}")
+                    st.stop()
+                
+                # 读取模板
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    template = f.read()
+                
+                # 替换数据占位符
+                data_json = json.dumps(data, ensure_ascii=False)
+                rendered = template.replace('{{DATA_JSON}}', data_json)
+                
+                # 替换 LLM 分析占位符
+                if analysis:
+                    analysis_json = json.dumps(analysis, ensure_ascii=False)
+                    rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_json)
+                    # 启用 LLM 模式标志
+                    rendered = rendered.replace('const USE_LLM=false', 'const USE_LLM=true')
                 else:
-                    df_yr['月实收'] = 0
+                    # 无 LLM 分析时注入空对象
+                    rendered = rendered.replace('{{LLM_ANALYSIS}}', '{}')
+                    # 保持 USE_LLM=false
+                
+                st.session_state['html'] = rendered
+                st.session_state['rendered'] = True
+                
+                st.success("✅ 仪表盘生成完成！")
+                
+            except Exception as e:
+                st.error(f"❌ 渲染失败: {str(e)}")
+                st.exception(e)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
-                agg_dict = {'月实收': 'sum'}
-                for c in num_cols: agg_dict[c] = 'sum'
-                global_df = df_yr.groupby(date_col).agg(agg_dict).reset_index()
-
-                projects = [p for p in df_yr['项目名称'].unique() if str(p) != 'nan']
-                task_list = [("global", global_df)] + [(p, df_yr[df_yr['项目名称'] == p]) for p in projects]
-
-                yr_db = {}
-                bar = st.progress(0)
-
-                for i, (name, p_df) in enumerate(task_list):
-                    latest = p_df.iloc[-1]
-                    p_label = "总体大盘" if name == "global" else name
-
-                    col = safe_float(latest.get(c_act_col))
-                    receivable = safe_float(latest.get(c_rec_col))
-                    col_rate = col / receivable if receivable > 0 else 0
-                    sign_amt = safe_float(latest.get(c_sign_amt))
-                    sign_u = int(safe_float(latest.get(c_sign_unit)))
-                    sub_u = int(safe_float(latest.get(c_sub_unit)))
-                    visit_u = int(safe_float(latest.get(c_visit)))
-                    click_u = int(safe_float(latest.get(c_click)))
-
-                    kpi_raw = {"collection": col, "col_rate": col_rate, "sign_amt": sign_amt, "sign_units": sign_u,
-                               "sub_units": sub_u, "visit": visit_u, "click": click_u}
-
-                    trends = {
-                        "months": [f"{m}月" for m in p_df[date_col].dt.month],
-                        "actualCollection": (p_df['月实收'] / 10000).round(0).tolist(),
-                        "planCollection": ((p_df[c_plan_col].diff().fillna(p_df[c_plan_col])) / 10000).round(
-                            0).tolist() if c_plan_col else [0] * len(p_df),
-                        "actualUnits": p_df[c_month_unit].tolist() if c_month_unit else [0] * len(p_df),
-                        "targetUnits": p_df[c_target_unit].tolist() if c_target_unit else [0] * len(p_df)
-                    }
-
-                    # ====================== 🔥 修复：AI 输出双重校验 ======================
-                    ai_raw = {}
-                    try:
-                        res = Generation.call(
-                            model="qwen-turbo",
-                            messages=[{"role": "system", "content": SYSTEM_PROMPT},
-                                      {"role": "user","content": get_diagnostic_prompt(p_label, {"kpi_raw": kpi_raw,
-                                                                                                   "funnel": {"s1": {"val": click_u},"s2": {"val": visit_u},"s3": {"val": sub_u},"s4": {"val": sign_u}},
-                                                                                                   "trendData": trends},yr, m_latest)}],
-                            response_format={"type": "json_object"}
-                        )
-                        text = res.output.text
-                        # 尝试解析JSON
-                        parsed = json.loads(text)
-                        if isinstance(parsed, dict):
-                            ai_raw = parsed
-                        elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
-                            ai_raw = parsed[0]
-                        else:
-                            # 解析成功但不是对象，重置为空
-                            ai_raw = {}
-                    except Exception as e:
-                        st.warning(f"⚠️ {p_label} AI解析失败，使用默认数据")
-                        ai_raw = {}
-
-                    # 🔥 强制兜底：不管ai_raw是什么类型，都转成字典
-                    if not isinstance(ai_raw, dict):
-                        ai_raw = {}
-
-                    # 🔥 强制字段兜底，100%不会报错
-                    banner = ai_raw.get('banner', {})
-                    if not isinstance(banner, dict):
-                        banner = {}
-                    diagnosis = ai_raw.get('diagnosis', {})
-                    if not isinstance(diagnosis, dict):
-                        diagnosis = {}
-                    insights = ai_raw.get('insights', [])
-                    if not isinstance(insights, list):
-                        insights = []
-                    actions = ai_raw.get('actions', [])
-                    if not isinstance(actions, list):
-                        actions = []
-
-                    yr_db[name] = {
-                        "banner": {
-                            "status": banner.get("status", "AI 诊断完成"),
-                            "statusClass": banner.get("statusClass", "vb-status-gray"),
-                            "headline": banner.get("headline", f"{p_label} 健康度诊断"),
-                            "sub": banner.get("sub", "数据正常，AI 已完成解析")
-                        },
-                        "kpi": [
-                            {"title": "年累计实收 (元)", "value": col, "subtext": f"截至{m_latest}月",
-                             "trend": "neutral", "hasPb": True, "pbVal": int(col_rate * 100) if col_rate <= 1 else 100,
-                             "pbColor": "pb-fill-blue", "pbTarget": "应收"},
-                            {"title": "回款率", "value": f"{col_rate * 100:.1f}%", "subtext": "全周期口径",
-                             "trend": "neutral", "hasPb": True, "pbVal": int(col_rate * 100) if col_rate <= 1 else 100,
-                             "pbColor": "pb-fill-blue", "pbTarget": "目标"},
-                            {"title": "年累计签约金额", "value": sign_amt, "subtext": "签约达成", "trend": "neutral",
-                             "hasPb": False},
-                            {"title": "年累计签约套数", "value": sign_u, "subtext": "去化规模", "trend": "neutral",
-                             "hasPb": False}
-                        ],
-                        "formulaData": {
-                            "l1": {"val": f"{col / 100000000:.2f}亿", "lbl": "实收回款", "style": "ff-n", "badge": "底线"},
-                            "l2_1": {"val": f"{sign_amt / 100000000:.2f}亿", "lbl": "签约金额", "style": "ff-n", "badge": "达成"},
-                            "l2_2": {"val": f"{col_rate * 100:.1f}%", "lbl": "回款率", "style": "ff-n", "badge": "效率"},
-                            "l3_1": {"val": f"{sign_u}套", "lbl": "签约套数", "style": "ff-n", "badge": "去化"},
-                            "l3_2": {"val": f"{int(safe_float(latest.get(c_price)))}", "lbl": "签约均价", "style": "ff-n", "badge": "溢价"},
-                            "l4_1": {"val": f"{sub_u}套", "lbl": "认购套数", "style": "ff-n", "badge": "逼定"},
-                            "l4_2": {"val": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "lbl": "认转签率", "style": "ff-n", "badge": "转化"},
-                            "l5_1": {"val": f"{click_u}", "lbl": "点击量", "style": "ff-n", "badge": "流量"},
-                            "l5_2": {"val": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.2f}%", "lbl": "转来访率", "style": "ff-n", "badge": "到访"},
-                            "l5_3": {"val": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "lbl": "转认购率", "style": "ff-n", "badge": "成交"},
-                            "diagnosis": {
-                                "leakage": diagnosis.get("leakage", []),
-                                "leverage": diagnosis.get("leverage", "暂无诊断建议")
-                            }
-                        },
-                        "funnel": {
-                            "s1": {"val": str(click_u), "lbl": "点击量", "badge": "获客层", "isBad": False},
-                            "c1": {"rate": f"{(visit_u / click_u * 100 if click_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
-                            "s2": {"val": str(visit_u), "lbl": "来访人次", "badge": "到访层", "isBad": False},
-                            "c2": {"rate": f"{(sub_u / visit_u * 100 if visit_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
-                            "s3": {"val": str(sub_u), "lbl": "认购套数", "badge": "预选层", "isBad": False},
-                            "c3": {"rate": f"{(sign_u / sub_u * 100 if sub_u > 0 else 0):.1f}%", "bm": "-", "isBad": False},
-                            "s4": {"val": str(sign_u), "lbl": "签约套数", "badge": "转化层", "isBad": False}
-                        },
-                        "trendData": {**trends, "insights": insights},
-                        "actions": actions if len(actions) > 0 else [["🟢 NOW", "系统", "诊断完成", "数据正常显示"]],
-                        "risks": []
-                    }
-                    bar.progress((i + 1) / len(task_list))
-
-                final_db[str(yr)] = yr_db
-
-            # ====================== 生成 HTML ======================
-            with open("template.html", "r", encoding="utf-8") as f:
-                tpl = f.read()
-            output_html = tpl.replace("{{ DATA_DICT_HERE }}", json.dumps(final_db, ensure_ascii=False, indent=2))
-
-            status.update(label="✅ 全景诊断看板生成成功！", state="complete")
-            st.balloons()
-            st.download_button("📥 点击下载看板 (HTML)", data=output_html, file_name=f"全景诊断_{yr}.html",
-                               mime="text/html")
-
-    except Exception as e:
-        st.error(f"❌ 运行失败: {str(e)}")
-        st.code(traceback.format_exc())
+# ============ 步骤5: 预览与下载 ============
+if st.session_state.get('rendered'):
+    html = st.session_state['html']
+    data = st.session_state['data']
+    
+    st.markdown('<div class="step-box">', unsafe_allow_html=True)
+    st.header("📥 步骤5：预览与下载")
+    
+    # 数据摘要
+    t = data['totals']
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("签约总额", f"¥{t['qy_amount']/1e4:.0f}万")
+    with col2:
+        st.metric("实收总额", f"¥{t['sh_amount']/1e4:.0f}万")
+    with col3:
+        st.metric("回款率", f"{t['collection_ratio']*100:.1f}%")
+    with col4:
+        st.metric("项目数", len(data['projects']))
+    
+    # 下载按钮
+    st.subheader("📥 下载仪表盘")
+    b64 = base64.b64encode(html.encode('utf-8')).decode()
+    filename = uploaded_file.name.replace('.xlsx', '_dashboard.html') if uploaded_file else 'dashboard.html'
+    
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        href = f'<a href="data:text/html;base64,{b64}" download="{filename}" style="display:inline-block;padding:12px 24px;background:#6c5ce1;color:white;text-decoration:none;border-radius:8px;font-weight:600;">💾 下载HTML文件</a>'
+        st.markdown(href, unsafe_allow_html=True)
+    with col_d2:
+        preview_html = f'<a href="data:text/html;base64,{b64}" target="_blank" style="display:inline-block;padding:12px 24px;background:#16a34a;color:white;text-decoration:none;border-radius:8px;font-weight:600;">👁️ 新窗口预览</a>'
+        st.markdown(preview_html, unsafe_allow_html=True)
+    
+    # 嵌入式预览
+    with st.expander("🖼️ 页面内预览（展开查看完整仪表盘）"):
+        st.components.v1.html(html, height=3000, scrolling=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    if st.session_state.get('processed'):
+        st.info("👆 点击「生成仪表盘」按钮")
