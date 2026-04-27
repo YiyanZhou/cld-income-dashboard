@@ -1,196 +1,727 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>营销业务数据推演与诊断 - 修复版</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #EEF3FA; color: #0D1B33; }
-        .num-font { font-family: system-ui, sans-serif; }
-        .hover-card { transition: all 0.3s ease; }
-        .hover-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(10,40,90,0.1); }
-        .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        .verdict-banner { background: #0C1A2E; }
-        .vb-status-red { background: rgba(217,45,32,.25); border:1px solid rgba(217,45,32,.5); color:#FCA5A5; }
-        .vb-status-green { background: rgba(2,122,72,.25); border:1px solid rgba(2,122,72,.5); color:#6CE9A6; }
-        .vb-status-amber { background: rgba(181,71,8,.25); border:1px solid rgba(181,71,8,.5); color:#FDE047; }
-        .vb-status-gray { background: rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); color:#A0B6CC; }
-        .pb-track { height:6px; background:#EEF3FA; border-radius:3px; border:1px solid #D8E6F3; }
-        .pb-fill-blue { background:linear-gradient(90deg,#1549C3,#60A5FA); height:100%; border-radius:3px; }
-        .chart-container { width:100%; height:400px; margin:10px 0; }
-        .text-red { color:#D92D20; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>销售业务健康度分析仪表盘 · YTD 2026 Q1</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--card-h:#222632;--border:#2a2e3a;--text:#e4e6eb;--dim:#8b8fa3;--accent:#6c5ce7;--alight:#a29bfe;--green:#00b894;--red:#e17055;--yellow:#fdcb6e;--blue:#0984e3;--orange:#e67e22}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.c{max-width:1400px;margin:0 auto;padding:20px}
+.hdr{background:linear-gradient(135deg,#1a1d27 0%,#2d1b69 100%);border-radius:16px;padding:28px 32px;margin-bottom:16px;border:1px solid var(--border)}
+.hdr h1{font-size:24px;font-weight:700;margin-bottom:4px}
+.hdr .sub{color:var(--dim);font-size:14px}
+.hdr .badge{display:inline-block;background:var(--accent);color:#fff;padding:2px 12px;border-radius:12px;font-size:12px;font-weight:600;margin-left:12px}
+.ovr{background:linear-gradient(135deg,rgba(225,112,85,.08),rgba(253,203,110,.08));border:1px solid var(--red);border-radius:12px;padding:16px 24px;margin-bottom:16px}
+.ovr h2{font-size:15px;color:var(--red);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ovr p{font-size:14px;color:var(--text);line-height:1.8}
+.ovr strong{color:var(--alight)}
+.ovr .sev{color:var(--red);font-weight:700}
+.fl{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;padding:14px 20px;background:var(--card);border-radius:12px;border:1px solid var(--border);align-items:center}
+.fl-g{display:flex;align-items:center;gap:8px}
+.fl-g label{font-size:13px;color:var(--dim);white-space:nowrap}
+.fl-g select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;outline:none;cursor:pointer}
+.fl-g select:focus{border-color:var(--accent)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.kc{background:var(--card);border-radius:12px;padding:18px 20px;border:1px solid var(--border);transition:transform .2s,box-shadow .2s}
+.kc:hover{transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.kc .lb{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kc .vl{font-size:24px;font-weight:700}
+.kc .ch{font-size:12px;margin-top:4px}
+.kc .ch.up{color:var(--green)}.kc .ch.dn{color:var(--red)}
+.kc .unit{font-size:13px;font-weight:400;color:var(--dim);margin-left:4px}
+.kc .gap{font-size:12px;color:var(--red);margin-top:2px}
+.sec{background:var(--card);border-radius:12px;padding:24px;margin-bottom:20px;border:1px solid var(--border)}
+.sec h2{font-size:16px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.sec h2 .d{width:10px;height:10px;border-radius:50%}
+.sec h2 .d.w{background:var(--blue)}.sec h2 .d.y{background:var(--yellow)}.sec h2 .d.o{background:var(--orange)}.sec h2 .d.g{background:var(--green)}
+.sec h3{font-size:14px;color:var(--alight);margin:16px 0 12px}
+.fact{list-style:none}.fact li{padding:8px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;gap:8px}.fact li:last-child{border-bottom:none}.fact li::before{content:"▸";color:var(--alight);flex-shrink:0}
+.fc{display:flex;flex-direction:column;gap:16px;margin-bottom:20px}
+.fi{padding:16px;border-radius:12px;background:var(--bg);border:1px solid var(--border);overflow:hidden}
+.fi .fh{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.fi .lt{background:var(--accent);color:#fff;padding:3px 12px;border-radius:6px;font-size:12px;font-weight:700}
+.fi .ft{font-size:15px;font-weight:600;color:var(--text)}
+.fi .note{font-size:12px;color:var(--dim);font-style:italic;margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)}
+.fi .note::before{content:"💡 ";}
+.fi .cards{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.fi .cd{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;min-width:120px;text-align:center}
+.fi .cd.sm{min-width:100px;padding:10px 12px}
+.fi .cd .cv{font-size:24px;font-weight:700;color:var(--alight)}
+.fi .cd.sm .cv{font-size:16px}
+.fi .cd .cl{font-size:13px;color:var(--dim);margin-top:6px;font-weight:600}
+.fi .cd .cb{display:inline-block;font-size:10px;padding:1px 8px;border-radius:4px;margin-top:4px;background:rgba(108,92,231,.15);color:var(--accent-light)}
+.fi .cd .bx{font-size:16px;font-weight:700;color:var(--dim);align-self:center;padding:0 4px;display:flex;align-items:center}
+.fi .inner{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
+.fi .cards-wrap{flex:1 1 auto;min-width:250px;display:flex;flex-direction:column;gap:8px}
+.fi .summary{flex:1 1 320px;min-width:280px;max-width:450px;background:var(--card);border-radius:8px;padding:12px 16px;border:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;font-size:12.5px;line-height:1.65}
+.fi .summary .st{font-size:11px;font-weight:700;color:var(--accent-light);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.fi .summary .sb{color:var(--text);margin-bottom:4px}
+.fi .summary .sb .up{color:var(--green)}.fi .summary .sb .dn{color:var(--red)}
+.fi.warn{border-color:rgba(225,112,85,.3)}
+.fi.warn .cd .cb{background:rgba(225,112,85,.15);color:var(--red)}
+.cr{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+.cb{background:var(--bg);border-radius:10px;padding:16px;border:1px solid var(--border)}
+.cb h3{font-size:13px;color:var(--dim);margin-bottom:12px}
+.cc{position:relative;height:300px}
+.an{display:flex;flex-direction:column;gap:8px;margin:16px 0}
+.ai{display:flex;align-items:flex-start;gap:12px;padding:12px 16px;border-radius:8px;border-left:4px solid}
+.ai.sev{border-color:var(--red);background:rgba(225,112,85,.06)}
+.ai.wrn{border-color:var(--yellow);background:rgba(253,203,110,.06)}
+.ai.info{border-color:var(--blue);background:rgba(9,132,227,.06)}
+.ai .at{font-size:12px;font-weight:700;padding:1px 8px;border-radius:4px;flex-shrink:0}
+.ai.sev .at{background:rgba(225,112,85,.2);color:var(--red)}
+.ai.wrn .at{background:rgba(253,203,110,.2);color:var(--yellow)}
+.ai.info .at{background:rgba(9,132,227,.2);color:var(--blue)}
+.ai .ab{font-size:13px;flex:1}
+.ag{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ac{padding:16px;border-radius:10px;border:1px solid var(--border)}
+.ac h3{font-size:14px;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ac h3 .pri{font-size:11px;padding:1px 8px;border-radius:4px;font-weight:600}
+.ac h3 .pri.h{background:rgba(225,112,85,.2);color:var(--red)}
+.ac h3 .pri.m{background:rgba(253,203,110,.2);color:var(--yellow)}
+.ac h3 .pri.l{background:rgba(0,184,148,.2);color:var(--green)}
+.ac p{font-size:13px;color:var(--dim)}
+.ac .mt{margin-top:8px;font-size:12px;color:var(--alight)}
+.tw{overflow-x:auto;margin:16px 0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--bg);padding:10px 12px;text-align:left;font-weight:600;color:var(--dim);border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:hover td{background:var(--card-h)}
+td.po{color:var(--green)}.td.ne{color:var(--red)}
+.ctx-badge{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:600;margin-left:8px}
+.ctx-badge.mgmt{background:rgba(9,132,227,.2);color:var(--blue)}
+.ctx-badge.health{background:rgba(0,184,148,.2);color:var(--green)}
+.ctx-badge.market{background:rgba(230,126,34,.2);color:var(--orange)}
+@media(max-width:768px){.kpi{grid-template-columns:repeat(2,1fr)}.cr{grid-template-columns:1fr}.ag{grid-template-columns:1fr}.fl{flex-direction:column;align-items:stretch}}
+.rec-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;margin-right:4px;font-weight:600}
+.rec-pill.high{background:#fee2e2;color:#dc2626}
+.rec-pill.mid{background:#fef3c7;color:#d97706}
+.rec-pill.low{background:#dcfce7;color:#16a34a}
+</style>
 </head>
-<body class="p-6 md:p-10 max-w-[1360px] mx-auto">
-    <div class="flex flex-col md:flex-row justify-between items-end mb-8 gap-4 border-b border-gray-200 pb-4">
-        <div>
-            <h1 class="text-3xl font-bold text-[#0D1B33]">营销业务健康度诊断与推演</h1>
-            <p class="text-gray-500 text-sm mt-2">
-                <span id="displayTimeRange" class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs font-bold">加载中...</span>
-            </p>
-        </div>
-        <div class="flex space-x-4">
-            <div>
-                <label class="text-xs text-gray-500 font-bold">年度</label>
-                <select id="yearSelector" onchange="updateProjectsAndSwitch()" class="w-32 border-2 rounded p-2"></select>
-            </div>
-            <div>
-                <label class="text-xs text-gray-500 font-bold">项目</label>
-                <select id="projectSelector" onchange="switchView()" class="w-56 border-2 rounded p-2"></select>
-            </div>
-        </div>
+<body>
+<div class="c">
+<div class="hdr">
+  <h1>销售业务健康度分析仪表盘 <span class="badge">YTD 2026 Q1</span></h1>
+  <div class="sub">基于 Wiley《Business Analytics》描述性→预测性→规范性分析框架 · 29个项目 · 数据截至 2026年3月</div>
+</div>
+<div class="ovr" id="ovrBox"></div>
+<div class="fl">
+  <div class="fl-g"><label>视角：</label><select id="viewF" onchange="applyAll()"><option value="mgmt">📊 管理视角</option><option value="health">💚 经营健康度视角</option><option value="market">🏙️ 行业市场视角</option></select></div>
+  <div class="fl-g"><label>项目：</label><select id="projF" onchange="applyAll()"><option value="all">全部项目汇总</option></select></div>
+</div>
+<div class="kpi" id="kpiBox"></div>
+<div class="sec"><h2><span class="d w"></span>1. What — 发生了什么</h2><div class="cr"><div class="cb"><h3>📈 月度趋势</h3><div class="cc"><canvas id="c1"></canvas></div></div><div class="cb"><h3>🎯 核心对比指标</h3><div class="cc"><canvas id="c2"></canvas></div></div></div><ul class="fact" id="whatList"></ul></div>
+<div class="sec"><h2><span class="d y"></span>2. Why — 为什么会这样</h2><h3>📐 L1→L5 五维公式链</h3><div class="fc" id="chainBox"></div><div class="cr"><div class="cb"><h3>🔻 转化漏斗</h3><div class="cc"><canvas id="c3"></canvas></div></div><div class="cb"><h3>📊 同比变化</h3><div class="cc"><canvas id="c4"></canvas></div></div></div><h3>⚠️ 异常 & 拐点识别</h3><div class="an" id="anomBox"></div></div>
+<div class="sec"><h2><span class="d o"></span>3. So What — 业务含义与影响</h2><ul class="fact" id="sowhatList"></ul><div class="cr" id="sowhatCharts"></div></div>
+<div class="sec"><h2><span class="d g"></span>4. Now What — 行动建议</h2><div class="ag" id="actionBox"></div></div>
+<div class="sec"><h2>📋 项目明细</h2><div class="tw" id="tableBox"></div></div>
+</div>
+<script>
+const DATA=JSON.parse('{{DATA_JSON}}');
+const LLM=JSON.parse('{{LLM_ANALYSIS}}');
+const USE_LLM=false;
+const T=DATA.totals;const P=DATA.projects;const M=T.monthly;
+let curView='mgmt';let curProj='all';let charts={};
+
+// Determine which views are available/relevant for current project
+
+// Determine which views to RECOMMEND (based on severity analysis)
+// Helpers
+function fmt(n){if(!n||isNaN(n))return'¥0';const a=Math.abs(n);if(a>=1e8)return'¥'+(n/1e8).toFixed(2)+'亿';if(a>=1e4)return'¥'+(n/1e4).toFixed(1)+'万';return'¥'+n.toFixed(0)}
+function fmtN(n){return n!=null?n.toLocaleString():'0'}
+function pct(n,d){return d?((n/d)*100).toFixed(1)+'%':'—'}
+function ctxLabel(){const cv=curView;return cv==='mgmt'?'vs 目标':cv==='health'?'vs 健康基准':'同比去年'}
+function ctxBadge(){const cv=curView;return `<span class="ctx-badge ${cv}">${cv==='mgmt'?'📊 管理视角':cv==='health'?'💚 经营健康度':'🏙️ 行业市场'}</span>`}
+
+// Populate project filter
+const pf=document.getElementById('projF');
+P.sort((a,b)=>b.qy_amount-a.qy_amount).forEach(p=>{const o=document.createElement('option');o.value=p.project;o.textContent=p.project;pf.appendChild(o)});
+
+function getData(){
+  if(curProj==='all')return T;
+  return P.find(x=>x.project===curProj)||T;
+}
+
+function getYoY(d){
+  const cv=curView;
+  if(cv==='market'){
+    if(d===T)return{qy:(T.q1_2025_qy?(T.qy_amount-T.q1_2025_qy)/T.q1_2025_qy:0),sh:(T.q1_2025_sh?(T.sh_amount-T.q1_2025_sh)/T.q1_2025_sh:0),units:(T.q1_2025_units?(T.qy_units-T.q1_2025_units)/T.q1_2025_units:0),visits:(T.q1_2025_visits?(T.visits-T.q1_2025_visits)/T.q1_2025_visits:0)};
+    return{qy:d.visits_yoy,sh:d.price_yoy,units:d.visits_yoy,visits:d.visits_yoy};
+  }
+  if(curView==='mgmt'){
+    if(d===T)return{qy:(T.tgt_qy_amount?(T.qy_amount-T.tgt_qy_amount)/T.tgt_qy_amount:0),sh:(T.tgt_qy_amount?(T.sh_amount-T.tgt_qy_amount)/T.tgt_qy_amount:0),units:(T.tgt_qy_units?(T.qy_units-T.tgt_qy_units)/T.tgt_qy_units:0),visits:0};
+    return{qy:(d.tgt_qy_amount?(d.qy_amount-d.tgt_qy_amount)/d.tgt_qy_amount:0),sh:(d.tgt_qy_amount?(d.sh_amount-d.tgt_qy_amount)/d.tgt_qy_amount:0),units:(d.tgt_qy_units?(d.qy_units-d.tgt_qy_units)/d.tgt_qy_units:0),visits:0};
+  }
+  // health: compare against health benchmarks
+  // qy -> collection ratio vs 100%, sh -> unpaid rate vs 0, units -> conversion efficiency vs benchmark
+  const collGap=d.sh_to_qy_ratio-1; // >0 good, <0 bad
+  const unpaidGap=d.qy_amount?-(d.unpaid/d.qy_amount):0; // negative = bad
+  const convRate=d.rg_units?(d.qy_units/d.rg_units-0.7):0; // vs 70% benchmark
+  const visitRate=d.visits?(d.rg_units/d.visits-0.15):0; // vs 15% benchmark
+  return{qy:collGap,sh:unpaidGap,units:convRate,visits:visitRate};
+}
+
+// ============ OVERVIEW ============
+function renderOverview(){
+  const d = getData();
+  const isTotal = d === T;
+  const yoyQyFull = T.q1_2025_qy ? (T.qy_amount-T.q1_2025_qy)/T.q1_2025_qy : 0;
+  const yoyViFull = T.q1_2025_visits ? (T.visits-T.q1_2025_visits)/T.q1_2025_visits : 0;
+
+  if (isTotal) {
+    const mgmtSev = d.tgt_qy_amount ? Math.abs(d.qy_amount/d.tgt_qy_amount-1)*100 : 0;
+    const collRatio = d.sh_to_qy_ratio || 0;
+    const healthSev = d.qy_amount ? Math.abs(collRatio-1)*100+(d.unpaid/d.qy_amount)*50 : 0;
+    const marketSev = Math.abs(yoyQyFull)*100+Math.abs(yoyViFull)*100;
+    let worst='管理视角',wv=mgmtSev;
+    if(healthSev>wv){worst='经营健康度视角';wv=healthSev}
+    if(marketSev>wv){worst='行业市场视角';wv=marketSev}
+    const sevMap={'管理视角':'目标达成缺口','经营健康度视角':'回款与现金流压力','行业市场视角':'市场萎缩幅度'};
+    
+    document.getElementById('ovrBox').innerHTML=`
+      <h2>🔍 全局 Overview — 核心风险定位</h2>
+      <p>YTD 2026 Q1 累计签约 <strong>${fmt(T.qy_amount)}</strong>（目标 ${fmt(T.tgt_qy_amount)}，达成率 <strong>${(T.qy_amount/T.tgt_qy_amount*100).toFixed(1)}%</strong>），实收 <strong>${fmt(T.sh_amount)}</strong>（回款率 <strong>${(T.collection_ratio*100).toFixed(1)}%</strong>），来访 <strong>${fmtN(T.visits)}人次</strong>（同比 <strong>${(yoyViFull*100).toFixed(1)}%</strong>）。签约套数 <strong>${fmtN(T.qy_units)}套</strong>（目标 ${fmtN(T.tgt_qy_units)}套，达成 <strong>${(T.qy_units/T.tgt_qy_units*100).toFixed(1)}%</strong>），应收未回款 <strong>${fmt(T.unpaid)}</strong>。</p>
+      <p style="margin-top:8px">🚨 三视角评估：<strong>管理视角</strong>目标缺口 ${mgmtSev.toFixed(1)}% | <strong>经营健康度</strong>回款偏差 ${healthSev.toFixed(1)}% | <strong>行业市场</strong>市场萎缩 ${marketSev.toFixed(1)}%</p>
+      <p>→ 当前差距最严重维度：<span class="sev">${worst}（${sevMap[worst]}）</span>，需优先关注。</p>
+    `;
+  } else {
+    const projYoyQy = d.visits_yoy || 0;
+    const projYoyPrice = d.price_yoy || 0;
+    
+    // Perspective severity analysis
+    const mgmtAch = d.tgt_qy_amount ? d.qy_amount/d.tgt_qy_amount : 1;
+    const healthCr = d.collection_ratio;
+    const hasMarket = (d.price_yoy!==0||d.visits_yoy!==0) && (d.price>0||d.visits>0);
+    
+    const recs=[];
+    if(mgmtAch<0.9) recs.push({v:'mgmt',label:'📊 管理视角',reason:`达成率仅${(mgmtAch*100).toFixed(0)}%，缺口${fmt(d.tgt_qy_amount-d.qy_amount)}`,level:'high'});
+    else if(mgmtAch<1) recs.push({v:'mgmt',label:'📊 管理视角',reason:`达成率${(mgmtAch*100).toFixed(0)}%，需冲刺`,level:'mid'});
+    
+    if(healthCr<0.7) recs.push({v:'health',label:'💚 经营健康度',reason:`回款率仅${(healthCr*100).toFixed(0)}%，应收未回${fmt(d.unpaid)}`,level:'high'});
+    else if(healthCr<0.9) recs.push({v:'health',label:'💚 经营健康度',reason:`回款率${(healthCr*100).toFixed(0)}%，应收压力${fmt(d.unpaid>0?d.unpaid:0)}`,level:'mid'});
+    
+    if(hasMarket && (d.visits_yoy<-0.3||d.price_yoy<-0.1)) recs.push({v:'market',label:'🏙️ 行业市场',reason:`来访↓${Math.abs(d.visits_yoy*100).toFixed(0)}%，均价${d.price_yoy<0?'↓':'↑'}${Math.abs(d.price_yoy*100).toFixed(0)}%`,level:d.visits_yoy<-0.5?'high':'mid'});
+    
+    const recHTML = recs.length ? recs.map(r=>`<span class="rec-pill ${r.level}">${r.label}：${r.reason}</span>`).join('') : '<span style="color:#16a34a;font-size:13px">✅ 各项指标正常，建议关注管理视角</span>';
+    
+    document.getElementById('ovrBox').innerHTML=`
+      <h2>🔍 项目 Overview — ${d.project}</h2>
+      <p>YTD 2026 Q1 签约 <strong>${fmt(d.qy_amount)}</strong>（目标 ${fmt(d.tgt_qy_amount)}，达成率 <strong>${(d.qy_achievement*100).toFixed(1)}%</strong>），实收 <strong>${fmt(d.sh_amount)}</strong>（回款率 <strong>${(d.collection_ratio*100).toFixed(1)}%</strong>），来访 <strong>${fmtN(d.visits)}人次</strong>（同比 <strong>${(projYoyQy*100).toFixed(1)}%</strong>），签约 <strong>${fmtN(d.qy_units)}套</strong>（目标 ${fmtN(d.tgt_qy_units)}套，达成 <strong>${(d.units_achievement*100).toFixed(1)}%</strong>），应收未回款 <strong>${fmt(d.unpaid)}</strong>。</p>
+      <p style="margin-top:8px">📌 核心特征：签约均价 ¥${d.price>0?d.price.toFixed(0):'—'}/㎡（同比 ${(projYoyPrice*100).toFixed(1)}%）| 认购转签约率 ${(d.rg_to_qy_rate*100).toFixed(1)}% | 来访转认购率 ${(d.visit_to_rg_rate*100).toFixed(1)}% | 目标缺口 <span class="sev">${fmt(d.tgt_qy_amount-d.qy_amount)}</span></p>
+      <p style="margin-top:10px">🔎 <strong>重点视角推荐：</strong>${recHTML}</p>
+    `;
+  }
+}
+
+// ============ KPI ============
+function renderKPIs(d){
+  const tgtRate=d.tgt_qy_amount?(d.qy_amount/d.tgt_qy_amount*100).toFixed(1):'—';
+  const collRate=d.qy_amount?(d.sh_to_qy_ratio*100).toFixed(1):'—';
+  const unitRate=d.tgt_qy_units?(d.qy_units/d.tgt_qy_units*100).toFixed(1):'—';
+  const unpaidRate=d.qy_amount?(d.unpaid_rate*100).toFixed(1):'—';
+  const yoy=getYoY(d);
+
+  document.getElementById('kpiBox').innerHTML=[
+    {l:'签约金额',v:fmt(d.qy_amount),ch:yoy.qy,cl:ctxLabel(),gap:d.tgt_qy_amount?`目标缺口 ${fmt(d.tgt_qy_amount-d.qy_amount)}`:null},
+    {l:'实收金额',v:fmt(d.sh_amount),ch:yoy.sh,cl:ctxLabel(),gap:`回款率 ${(d.collection_ratio*100).toFixed(1)}%`},
+    {l:'签约目标达成率',v:tgtRate+'%',ch:d.tgt_qy_amount?(d.qy_amount/d.tgt_qy_amount-1):null,cl:ctxLabel(),gap:d.tgt_qy_amount&&d.qy_amount/d.tgt_qy_amount<0.6?'⚠️ 低于60%红线':null},
+    {l:'签约套数',v:fmtN(d.qy_units),ch:yoy.units,cl:ctxLabel(),gap:d.tgt_qy_units?`目标缺口 ${fmtN(d.tgt_qy_units-d.qy_units)}套`:null},
+    {l:'来访人次',v:fmtN(d.visits),ch:yoy.visits,cl:ctxLabel(),gap:null},
+    {l:'应收未回款',v:fmt(d.unpaid),ch:null,gap:`占签约 ${unpaidRate}%`},
+  ].map(k=>`
+    <div class="kc">
+      <div class="lb">${k.l} ${ctxBadge()}</div>
+      <div class="vl">${k.v}</div>
+      ${k.ch!==null?`<div class="ch ${k.ch>=0?'up':'dn'}">${k.ch>=0?'▲':'▼'} ${(Math.abs(k.ch)*100).toFixed(1)}% ${k.cl}</div>`:''}
+      ${k.gap?`<div class="gap">${k.gap}</div>`:''}
     </div>
+  `).join('');
+}
 
-    <div id="dashboardContent" class="fade-in"></div>
+// ============ WHAT ============
+function renderWhat(d){
+  const yoy=getYoY(d);
+  const yoyQyFull=T.q1_2025_qy?(T.qy_amount-T.q1_2025_qy)/T.q1_2025_qy:0;
+  const yoyViFull=T.q1_2025_visits?(T.visits-T.q1_2025_visits)/T.q1_2025_visits:0;
+  const active=P.filter(p=>p.qy_amount>0||p.visits>0);
+  const top3=active.sort((a,b)=>b.qy_amount-a.qy_amount).slice(0,3);
 
-    <script>
-        const db = {{ DATA_DICT_HERE }};
-        let chartTrend1, chartTrend2;
+  let items=[];
+  if(d===T){
+    items=[
+      `Q1 累计签约 ${fmt(T.qy_amount)}，仅完成年度目标 ${fmt(T.tgt_qy_amount)} 的 <strong>${(T.qy_amount/T.tgt_qy_amount*100).toFixed(1)}%</strong>，套数达成率 ${(T.qy_units/T.tgt_qy_units*100).toFixed(1)}%`,
+      `实收回款 ${fmt(T.sh_amount)}，回款率 ${(T.collection_ratio*100).toFixed(1)}%，应收未回款 ${fmt(T.unpaid)}（占比 ${(T.unpaid_rate*100).toFixed(1)}%）`,
+      `总来访 ${fmtN(T.visits)}人次，同比去年同期 ${(yoyViFull*100).toFixed(1)}%（${fmtN(T.q1_2025_visits)}→${fmtN(T.visits)}）`,
+      `签约金额 Top3：${top3.map(p=>`${p.project}(${fmt(p.qy_amount)})`).join('、')}`,
+      `29个项目中有11个全年零业务活动，仅18个项目在运营，项目分化极端`,
+      `月度趋势：1月→2月→3月 签约累计 ${fmt(M[0].qy)} → ${fmt(M[1].qy)} → ${fmt(M[2].qy)}，3月单月新增 ${fmt(M[2].qy-M[1].qy)}`,
+    ];
+  } else {
+    items=[
+      `<strong>${d.project}</strong>：Q1 累计签约 ${fmt(d.qy_amount)}（目标 ${fmt(d.tgt_qy_amount)}，达成 <strong>${(d.qy_achievement*100).toFixed(1)}%</strong>）`,
+      `实收回款 ${fmt(d.sh_amount)}，回款率 ${(d.collection_ratio*100).toFixed(1)}%，应收未回款 ${fmt(d.unpaid)}`,
+      `来访 ${fmtN(d.visits)}人次（同比 ${(d.visits_yoy*100).toFixed(1)}%），认购 ${fmtN(d.rg_units)}套，签约 ${fmtN(d.qy_units)}套`,
+      `认购转签约率 ${(d.rg_to_qy_rate*100).toFixed(1)}%（去年同期 ${(d.rg_to_qy_rate_ly*100).toFixed(1)}%），来访转认购率 ${(d.visit_to_rg_rate*100).toFixed(1)}%`,
+      `签约均价 ${d.price>0?'¥'+d.price.toFixed(0)+'/㎡':'—'}（同比 ${(d.price_yoy*100).toFixed(1)}%）`,
+    ];
+  }
+  document.getElementById('whatList').innerHTML=items.map(i=>`<li>${i}</li>`).join('');
+}
 
-        function fmtStr(v) {
-            if(!v || v === 0) return '<span class="text-gray-300">—</span>';
-            return `<span class="num-font">${v}</span>`;
-        }
+// ============ FORMULA CHAIN ============
+function renderChain(d){
+  const collRate=d.sh_to_qy_ratio||0;
+  const visitRgRate=d.visit_to_rg_rate||0;
+  const rgQyRate=d.rg_to_qy_rate||0;
+  const totalP=d.qy_amount?(d.qy_amount/1e4).toFixed(0):'0';
+  const rgDays=d.rg_to_qy_days||0;
+  const viRgDays=d.visit_to_rg_days||0;
 
-        function updateProjectsAndSwitch() {
-            const year = document.getElementById('yearSelector').value;
-            const sel = document.getElementById('projectSelector');
-            sel.innerHTML = '';
-            if(db[year]) {
-                Object.keys(db[year]).forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p;
-                    opt.textContent = p === 'global' ? '总体大盘' : p;
-                    sel.appendChild(opt);
-                });
-            }
-            switchView();
-        }
+  const card=(v,l,b,cls)=>`<div class="cd${cls?' '+cls:''}"><div class="cv">${v}</div><div class="cl">${l}</div><div class="cb">${b}</div></div>`;
+  const box=()=>`<div class="bx">×</div>`;
+  const note=(t)=>`<div class="note">${t}</div>`;
+  // up replaced with upTag
+  // dn replaced with dnTag
 
-        function renderProjectView(container, data, prj, year) {
-            container.innerHTML = '';
-            container.innerHTML += generateBanner(data.banner);
+  const warnL1=d.collection_ratio>1.1||d.collection_ratio<0.7;
+  const warnL4=visitRgRate<0.05&&d.visits>0;
+  const warnL5=d.clicks===0;
 
-            container.innerHTML += `<div class="my-4 font-bold text-lg">📊 核心指标</div>`;
-            const kpiDiv = document.createElement('div');
-            kpiDiv.className = 'grid grid-cols-1 md:grid-cols-4 gap-4 mb-6';
-            data.kpi.forEach(k => kpiDiv.innerHTML += generateKPIHtml(k));
-            container.appendChild(kpiDiv);
+    // Build analytical summaries per layer
+  const viewLabel = curView==='mgmt'?'📊 管理视角':curView==='health'?'💚 健康度视角':'🏙️ 市场视角';
+  const isTotal = d === T;
+  const projLabel = isTotal ? '' : ' — '+d.project;
 
-            container.innerHTML += `<div class="my-4 font-bold text-lg">🧩 转化漏斗</div>`;
-            const funnelDiv = document.createElement('div');
-            funnelDiv.className = 'bg-white p-4 rounded shadow mb-6';
-            funnelDiv.innerHTML = generateFunnel(data.funnel);
-            container.appendChild(funnelDiv);
+  const sm = (title,...items) => `<div class="summary"><div class="st">${title}${projLabel}</div>${items.map(i=>`<div class="sb">${i}</div>`).join('')}</div>`;
+  const upTag = (v) => `<span class="up">▲${v}</span>`;
+  const dnTag = (v) => `<span class="dn">▼${v}</span>`;
 
-            container.innerHTML += `<div class="my-4 font-bold text-lg">🔍 AI 诊断</div>`;
-            const formulaDiv = document.createElement('div');
-            formulaDiv.className = 'bg-white p-4 rounded shadow mb-6';
-            formulaDiv.innerHTML = generateFormulaChain(data.formulaData);
-            container.appendChild(formulaDiv);
+  const yoyQy = T.q1_2025_qy ? (T.qy_amount - T.q1_2025_qy) / T.q1_2025_qy : 0;
+  const yoySh = T.q1_2025_sh ? (T.sh_amount - T.q1_2025_sh) / T.q1_2025_sh : 0;
+  const yoyVi = T.q1_2025_visits ? (T.visits - T.q1_2025_visits) / T.q1_2025_visits : 0;
 
-            const chart1 = document.createElement('div');
-            chart1.className = 'chart-container';
-            container.appendChild(chart1);
-            chartTrend1 = echarts.init(chart1);
-            chartTrend1.setOption({
-                xAxis: { data: data.trendData.months },
-                yAxis: { type: 'value' },
-                series: [
-                    { name: '实收', type: 'bar', data: data.trendData.actualCollection },
-                    { name: '计划', type: 'line', data: data.trendData.planCollection }
-                ]
-            });
+  // L1
+  if (curView === 'mgmt') {
+    if (isTotal) {
+      const collGap = T.ys_amount - T.sh_amount;
+      const collStr = collGap > 0 ? `应收${fmt(T.ys_amount)}，实收${fmt(T.sh_amount)}，未回款${fmt(collGap)}，回款率仅${(T.collection_ratio*100).toFixed(0)}%，回款进度滞后` : `实收${fmt(T.sh_amount)}超应收${fmt(T.ys_amount)}，含前期应收回款`;
+      s1 = sm(viewLabel, collStr, `回款率 ${(T.collection_ratio*100).toFixed(0)}%，应收未回款 ${fmt(T.unpaid)}，占比 ${(T.unpaid_rate*100).toFixed(1)}%`);
+    } else {
+      const collGap = d.ys_amount - d.sh_amount;
+      const collStr = collGap > 0 ? `应收${fmt(d.ys_amount)}，实收${fmt(d.sh_amount)}，未回款${fmt(collGap)}` : `实收超应收，含前期回款`;
+      s1 = sm(viewLabel, collStr, `回款率 ${(d.collection_ratio*100).toFixed(0)}%，应收未回款 ${fmt(d.unpaid)}，占比 ${(d.unpaid_rate*100).toFixed(1)}%`);
+    }
+  } else if (curView === 'health') {
+    if (isTotal) {
+      const highColl = P.filter(p => p.collection_ratio > 1.05);
+      const lowColl = P.filter(p => p.collection_ratio < 0.7 && p.ys_amount > 0);
+      s1 = sm(viewLabel, `回款率结构分化严重：实收对标应收`,
+        `• ${highColl.length}个项目回款率>105%（${highColl.slice(0,2).map(p=>p.project).join('、')}等），实收超应收，含前期回款`,
+        `• ${lowColl.length}个项目回款率<70%（${lowColl.slice(0,2).map(p=>p.project).join('、')}），应收未回款占比高，现金流承压`,
+        `• 应收未回款 ${fmt(T.unpaid)}，占应收总额 ${(T.unpaid_rate*100).toFixed(1)}%`);
+    } else {
+      s1 = sm(viewLabel, `回款率 ${(d.collection_ratio*100).toFixed(0)}%，对标应收${fmt(d.ys_amount)}`,
+        `实收${fmt(d.sh_amount)} vs 应收${fmt(d.ys_amount)}，${d.collection_ratio>=0.9?'✅ 回款正常':'⚠️ 回款不足'}`,
+        d.unpaid>0?`应收未回款 ${fmt(d.unpaid)}，占比 ${(d.unpaid_rate*100).toFixed(1)}%`:'无应收压力');
+    }
+  } else {
+    if (isTotal) {
+      s1 = sm(viewLabel, `实收同比 ${yoySh>=0?upTag((yoySh*100).toFixed(0)+'%'):dnTag((Math.abs(yoySh)*100).toFixed(0)+'%')}${yoySh<0?'，回款链条受市场萎缩传导':''}`, `签约同比 ${yoyQy>=0?upTag((yoyQy*100).toFixed(0)+'%'):dnTag((Math.abs(yoyQy)*100).toFixed(0)+'%')}`);
+    } else {
+      s1 = sm(viewLabel, `实收同比 ${yoySh>=0?upTag((yoySh*100).toFixed(0)+'%'):dnTag((Math.abs(yoySh)*100).toFixed(0)+'%')}`, `回款率 ${(d.collection_ratio*100).toFixed(0)}%，${d.collection_ratio>=0.9?'达标':'偏低'}`);
+    }
+  }
 
-            const chart2 = document.createElement('div');
-            chart2.className = 'chart-container';
-            container.appendChild(chart2);
-            chartTrend2 = echarts.init(chart2);
-            chartTrend2.setOption({
-                xAxis: { data: data.trendData.months },
-                yAxis: { type: 'value' },
-                series: [
-                    { name: '签约', type: 'bar', data: data.trendData.actualUnits },
-                    { name: '目标', type: 'line', data: data.trendData.targetUnits }
-                ]
-            });
+  // L2
+  if (curView === 'mgmt') {
+    if (isTotal) {
+      s2 = sm(viewLabel, `签约达成率 ${(d.qy_amount/d.tgt_qy_amount*100).toFixed(0)}%，缺口 ${fmt(d.tgt_qy_amount-d.qy_amount)}`, `按当前节奏全年完成约 ${(d.qy_amount/d.tgt_qy_amount*4*100).toFixed(0)}%${(d.qy_amount/d.tgt_qy_amount*4)<0.6?'，需紧急干预':'，可接受'}`);
+    } else {
+      const gap = d.tgt_qy_amount ? fmt(d.tgt_qy_amount-d.qy_amount) : '—';
+      s2 = sm(viewLabel, `目标达成率 ${(d.qy_achievement*100).toFixed(0)}%，缺口 ${gap}，排名第 ${P.filter(p=>p.qy_achievement>d.qy_achievement).length+1}`, `按当前节奏全年约 ${d.tgt_qy_amount?(d.qy_amount/d.tgt_qy_amount*4*100).toFixed(0):'—'}%${d.qy_achievement<0.6?'，需紧急干预':'，进度可接受'}`);
+    }
+  } else if (curView === 'health') {
+    if (isTotal) {
+      const below = P.filter(p=>p.qy_amount>0&&p.qy_achievement<0.6);
+      s2 = sm(viewLabel, `${below.length}/${P.filter(p=>p.qy_amount>0).length} 个项目达成率<60%，系统性风险`, `应收未回款 ${fmt(T.unpaid)}，资金占用约 ${(T.unpaid*0.06/12*3/10000).toFixed(0)}万/季`);
+    } else {
+      s2 = sm(viewLabel, `回款率 ${(d.collection_ratio*100).toFixed(0)}% ${d.collection_ratio<0.8?'⚠️ 偏低':'✅ 健康'}`, d.unpaid>0?`应收压力 ${fmt(d.unpaid)}`:'无应收压力');
+    }
+  } else {
+    if (isTotal) {
+      s2 = sm(viewLabel, `签约同比 ${yoyQy>=0?upTag((yoyQy*100).toFixed(0)+'%'):dnTag((Math.abs(yoyQy)*100).toFixed(0)+'%')}，量价齐跌压力`, `${P.filter(p=>p.price_yoy<-0.15).length}个项目均价降幅超15%，"以价换量"效果有限`);
+    } else {
+      s2 = sm(viewLabel, `签约 ${fmt(d.qy_amount)} ${d.price_yoy<-0.15?'，均价降幅过大':'，价格区间合理'}`, `回款率 ${(d.collection_ratio*100).toFixed(0)}%，${d.collection_ratio>=1?'充足':'不足'}`);
+    }
+  }
 
-            container.innerHTML += `<div class="my-4 font-bold text-lg">✅ 行动建议</div>`;
-            const actDiv = document.createElement('div');
-            actDiv.className = 'bg-white p-4 rounded shadow';
-            data.actions.forEach(a => {
-                actDiv.innerHTML += `<div class="p-2 border-b">${a[0]} ${a[1]} ${a[2]}：${a[3]}</div>`;
-            });
-            container.appendChild(actDiv);
-        }
+  // L3
+  if (curView === 'mgmt') {
+    const priceDir = d.price_yoy < -0.1 ? '以价换量' : d.price_yoy > 0.05 ? '量价齐升' : '量价平稳';
+    s3 = sm(viewLabel, `"${priceDir}"阶段：${priceDir==='以价换量'?'均价下行但去化未改善，弹性不足':priceDir==='量价齐升'?'理想状态，需关注可持续性':'无显著变化，需找突破点'}`, `均价 ¥${d.price>0?d.price.toFixed(0):'—'}/㎡ ${d.price_yoy<0?dnTag('↓'+Math.abs(d.price_yoy*100).toFixed(0)+'%'):d.price_yoy>0?upTag('↑'+(d.price_yoy*100).toFixed(0)+'%'):'持平'}`, `${d.area>0?'去化 '+d.area.toFixed(0)+'㎡':'面积待补充'}，${d.visits_yoy<-0.3?'需求严重收缩':d.visits_yoy<0?'需求温和下滑':'需求稳定'}`);
+  } else if (curView === 'health') {
+    if (isTotal) {
+      s3 = sm(viewLabel, `${P.filter(p=>p.price_yoy<-0.15).length}/${P.filter(p=>p.qy_amount>0).length} 个项目均价降幅超15%，系统性下行`, `均价 ¥${d.price>0?d.price.toFixed(0):'—'}/㎡ ${d.price_yoy<-0.1?'降幅过大，可能引发观望加剧':'可控'}`);
+    } else {
+      s3 = sm(viewLabel, `均价 ¥${d.price>0?d.price.toFixed(0):'—'}/㎡ ${d.price_yoy<-0.15?dnTag('降幅过大'):upTag('稳定')}`, `${d.area>0?'去化 '+d.area.toFixed(0)+'㎡':''}`);
+    }
+  } else {
+    if (isTotal) {
+      s3 = sm(viewLabel, `${P.filter(p=>p.price_yoy<0).length}/${P.filter(p=>p.qy_amount>0).length} 个项目均价同比下降，行业下行周期`, `${P.filter(p=>p.price_yoy<-0.15).length}个降幅>15%，${P.filter(p=>p.price_yoy>=0).length}个逆势上涨，分化加剧`);
+    } else {
+      s3 = sm(viewLabel, `均价同比 ${d.price_yoy<0?dnTag('↓'+Math.abs(d.price_yoy*100).toFixed(0)+'%'):upTag('↑'+(d.price_yoy*100).toFixed(0)+'%')}`, `去化 ${d.area>0?d.area.toFixed(0)+'㎡':'—'}`);
+    }
+  }
 
-        function switchView() {
-            const year = document.getElementById('yearSelector').value;
-            const prj = document.getElementById('projectSelector').value;
-            const data = db[year][prj];
-            const container = document.getElementById('dashboardContent');
+  // L4
+  if (curView === 'mgmt') {
+    const rgQyDays = d.rg_to_qy_days || T.rg_to_qy_days || 0;
+    if (isTotal) {
+      s4 = sm(viewLabel, `认转签率 ${(rgQyRate*100).toFixed(0)}% ${rgQyRate>=0.7?'✅ 达标':rgQyRate>=0.5?'⚠️ 偏低':'🔴 严重不足'}`, rgQyDays>0?`转化中位数 ${rgQyDays.toFixed(1)}天 ${rgQyDays>14?'⚠️ 周期过长':'✅ 可接受'}`:'', `${d.rg_units>0?'在途 '+d.rg_units+'套':''}${d.rg_units>d.qy_units?'，存在积压':''}`);
+    } else {
+      const lyCompare = d.rg_to_qy_rate_ly?`（去年同期 ${(d.rg_to_qy_rate_ly*100).toFixed(0)}%）`:'';
+      s4 = sm(viewLabel, `认转签率 ${(rgQyRate*100).toFixed(0)}% ${rgQyRate>=0.7?'✅':rgQyRate<0.5?'🔴':'⚠️'}${lyCompare}`, rgQyDays>0?`转化 ${rgQyDays.toFixed(1)}天 ${rgQyDays>14?'⚠️ 过长':'✅ 可接受'}`:'', `${d.rg_units>0?'在途 '+d.rg_units+'套':'无在途'}`);
+    }
+  } else if (curView === 'health') {
+    if (isTotal) {
+      const lowC = P.filter(p=>p.rg_to_qy_rate<0.5&&p.rg_units>0);
+      s4 = sm(viewLabel, `${lowC.length}个项目认转签率<50%（${lowC.map(p=>p.project).slice(0,2).join('、')||'无'}）`, `整体转化中位数 ${T.rg_to_qy_days>0?T.rg_to_qy_days.toFixed(1)+'天':'—'} ${T.rg_to_qy_days>14?'⚠️ 偏长':'✅ 合理'}`);
+    } else {
+      s4 = sm(viewLabel, `认转签率 ${(d.rg_to_qy_rate*100).toFixed(0)}% ${d.rg_to_qy_rate<0.5?'⚠️ 偏低':'✅ 尚可'}`, d.rg_to_qy_rate_ly?`去年同期 ${(d.rg_to_qy_rate_ly*100).toFixed(0)}%，${d.rg_to_qy_rate>d.rg_to_qy_rate_ly?'▲ 改善':'▼ 下滑'}`:'');
+    }
+  } else {
+    if (isTotal) {
+      const decline = P.filter(p=>p.rg_to_qy_rate<(p.rg_to_qy_rate_ly||1));
+      s4 = sm(viewLabel, `${decline.length}个项目认转签率同比下滑，决策周期拉长`, `行业：购房者观望浓厚，逼定难度加大`);
+    } else {
+      s4 = sm(viewLabel, `认转签率 ${(d.rg_to_qy_rate*100).toFixed(0)}% ${d.rg_to_qy_rate_ly?`（去年 ${(d.rg_to_qy_rate_ly*100).toFixed(0)}%，${d.rg_to_qy_rate>d.rg_to_qy_rate_ly?'▲ 改善':'▼ 下滑'}）`:''}`, d.rg_to_qy_rate<0.7?'转化率偏低，决策犹豫':'转化达标');
+    }
+  }
 
-            document.getElementById('displayTimeRange').innerText = `${year}年`;
-            renderProjectView(container, data, prj, year);
-        }
+  // L5
+  if (curView === 'mgmt') {
+    const viDays = d.visit_to_rg_days || T.visit_to_rg_days || 0;
+    if (isTotal) {
+      s5 = sm(viewLabel, `来访 ${fmtN(d.visits)}人次 ${d.visits_yoy?d.visits_yoy<0?dnTag('↓'+Math.abs(d.visits_yoy*100).toFixed(0)+'%'):upTag('↑'+(d.visits_yoy*100).toFixed(0)+'%'):''}`, `转认购率 ${(visitRgRate*100).toFixed(0)}% ${visitRgRate<0.1?'⚠️ 偏低':visitRgRate>=0.15?'✅ 达标':'尚可'}`, viDays>0?`转化 ${viDays.toFixed(1)}天 ${viDays>60?'⚠️ 过长':'✅ 合理'}`:'');
+    } else {
+      s5 = sm(viewLabel, `来访 ${fmtN(d.visits)}人次 ${d.visits_yoy?d.visits_yoy<0?dnTag('↓'+Math.abs(d.visits_yoy*100).toFixed(0)+'%'):upTag('↑'+(d.visits_yoy*100).toFixed(0)+'%'):''}`, `转认购率 ${(visitRgRate*100).toFixed(0)}% ${visitRgRate<0.1?'⚠️ 偏低':visitRgRate>=0.15?'✅ 达标':'尚可'}`, viDays>0?`转化 ${viDays.toFixed(1)}天 ${viDays>60?'⚠️ 过长':'✅ 合理'}`:'');
+    }
+  } else if (curView === 'health') {
+    if (isTotal) {
+      const lowV = P.filter(p=>p.visits<100&&p.qy_amount>0);
+      const highV = P.filter(p=>p.visits>=400);
+      s5 = sm(viewLabel, `${lowV.length}个项目来访<100（${lowV.map(p=>p.project).slice(0,3).join('、')||'无'}），获客匮乏`, `${highV.length}个项目来访≥400（${highV.map(p=>p.project).slice(0,2).join('、')||'无'}），流量集中`);
+    } else {
+      s5 = sm(viewLabel, `来访 ${fmtN(d.visits)}人次 ${d.visits<100?'🔴 严重不足':d.visits>=400?'✅ 充足':'⚠️ 偏低'}`, `转认购率 ${(visitRgRate*100).toFixed(0)}% ${visitRgRate<0.1?'⚠️ 偏低':'✅ 尚可'}`);
+    }
+  } else {
+    if (isTotal) {
+      s5 = sm(viewLabel, `来访同比 ${yoyVi>=0?upTag((yoyVi*100).toFixed(0)+'%'):dnTag((Math.abs(yoyVi)*100).toFixed(0)+'%')}${yoyVi<0?'，需求显著收缩':''}`, `缺口 ${fmtN(T.q1_2025_visits-T.visits)}人次，签约下滑核心驱动`, `线上获客数据缺失（点击=0），数字化渠道严重滞后`);
+    } else {
+      s5 = sm(viewLabel, `来访同比 ${d.visits_yoy>=0?upTag((d.visits_yoy*100).toFixed(0)+'%'):dnTag((Math.abs(d.visits_yoy)*100).toFixed(0)+'%')}`, `在${P.length}个项目中排名 ${P.filter(p=>p.visits>d.visits).length+1}`, `获客渠道${d.visits<100?'严重匮乏':'基本覆盖'}`);
+    }
+  }
 
-        function generateBanner(b) {
-            return `<div class="verdict-banner p-6 rounded shadow mb-6 text-white">
-                <div class="${b.statusClass} inline-block px-2 py-1 rounded text-xs mb-2">${b.status}</div>
-                <h2 class="text-xl font-bold">${b.headline}</h2>
-                <p class="text-gray-400 text-xs">${b.sub}</p></div>`;
-        }
+  const sum1 = USE_LLM && LLM.l1_summary ? `<div class="summary"><div class="st">📊 分析结论</div><div class="sb">${LLM.l1_summary}</div></div>` : s1;
+  const sum2 = USE_LLM && LLM.l2_summary ? `<div class="summary"><div class="st">📊 分析结论</div><div class="sb">${LLM.l2_summary}</div></div>` : s2;
+  const sum3 = USE_LLM && LLM.l3_summary ? `<div class="summary"><div class="st">📊 分析结论</div><div class="sb">${LLM.l3_summary}</div></div>` : s3;
+  const sum4 = USE_LLM && LLM.l4_summary ? `<div class="summary"><div class="st">📊 分析结论</div><div class="sb">${LLM.l4_summary}</div></div>` : s4;
+  const sum5 = USE_LLM && LLM.l5_summary ? `<div class="summary"><div class="st">📊 分析结论</div><div class="sb">${LLM.l5_summary}</div></div>` : s5;
 
-        function generateKPIHtml(item) {
-            return `<div class="bg-white p-4 rounded shadow hover-card">
-                <div class="text-xs text-gray-500">${item.title}</div>
-                <div class="text-2xl font-bold my-2">${fmtStr(item.value)}</div>
-                <div class="text-xs">${item.subtext}</div></div>`;
-        }
 
-        function generateFunnel(f) {
-            return `<div class="flex justify-between items-center overflow-x-auto">
-                <div class="text-center">${f.s1.val}<br><small>${f.s1.lbl}</small></div>
-                <div class="text-center">→<br>${f.c1.rate}</div>
-                <div class="text-center">${f.s2.val}<br><small>${f.s2.lbl}</small></div>
-                <div class="text-center">→<br>${f.c2.rate}</div>
-                <div class="text-center">${f.s3.val}<br><small>${f.s3.lbl}</small></div>
-                <div class="text-center">→<br>${f.c3.rate}</div>
-                <div class="text-center">${f.s4.val}<br><small>${f.s4.lbl}</small></div>
-            </div>`;
-        }
+  document.getElementById('chainBox').innerHTML=`
+    <div class="fi${warnL1?' warn':''}">
+      <div class="fh"><span class="lt">L1</span><span class="ft">实收回款</span></div>
+      <div class="inner"><div class="cards-wrap"><div class="cards">${card(fmt(d.sh_amount),'实收回款','底线')}</div></div>${sum1}</div>
+      ${note('结果定性：反映当期真实落袋的现金流规模，是最终考核的底线')}
+    </div>
+    <div class="fi">
+      <div class="fh"><span class="lt">L2</span><span class="ft">资金转化</span></div>
+      <div class="inner"><div class="cards-wrap"><div class="cards">${card(fmt(d.qy_amount),'签约金额','运营')}${box()}${card((d.collection_ratio*100).toFixed(1)+'%','回款率','管理')}${card(fmt(d.ys_amount),'应收金额','参考','sm')}</div></div>${sum2}</div>
+      ${note('诊断逻辑：签约金额↓=运营问题（前端获客不足）| 回款率↓=管理问题（应收催收不力），应收金额为参考基数')}
+    </div>
+    <div class="fi">
+      <div class="fh"><span class="lt">L3</span><span class="ft">量价拆解</span></div>
+      <div class="inner"><div class="cards-wrap"><div class="cards">${card(d.area.toFixed(1)+'㎡','签约面积','去化')}${box()}${card(d.price>0?'¥'+d.price.toFixed(0)+'/㎡':'—','签约均价','溢价')}</div></div>${sum3}</div>
+      ${note('策略透视：签约面积×签约均价=签约金额，签约→应收→实收决定最终回款')}
+    </div>
+    <div class="fi${warnL4?' warn':''}">
+      <div class="fh"><span class="lt">L4</span><span class="ft">案场逼定</span></div>
+      <div class="inner"><div class="cards-wrap"><div class="cards">${card(fmtN(d.rg_units)+'套','认购套数','逼定')}${box()}${card(d.rg_units?(d.qy_units/d.rg_units*100).toFixed(1)+'%':'—','认转签率','成交')}${card(d.rg_to_qy_days>0?d.rg_to_qy_days.toFixed(0)+'天':'—','认购转签约','效率','sm')}</div></div>${sum4}</div>
+      ${note('载客诊断：检验案场一线销售的逼定能力')}
+    </div>
+    <div class="fi${warnL5?' warn':''}">
+      <div class="fh"><span class="lt">L5</span><span class="ft">漏斗探源</span></div>
+      <div class="inner"><div class="cards-wrap"><div class="cards">${card(fmtN(d.visits)+'人次','来访人数','流量')}${box()}${card(d.visits?(visitRgRate*100).toFixed(1)+'%':'—','来访转认购率','转化')}${card(d.visit_to_rg_days>0?d.visit_to_rg_days.toFixed(0)+'天':'—','来访转认购','效率','sm')}</div></div>${sum5}</div>
+      ${note('漏斗探源：检验获客质量与案场一线销售的转化能力')}
+    </div>
+  `;
+}
 
-        // 🔥 100% 修复 map 报错 & function sub()
-        function generateFormulaChain(fd) {
-            if(!fd) return '<div>暂无诊断数据</div>';
+// ============ ANOMALIES ============
+function renderAnomalies(){
+  let items=[];
+  if(curProj==='all'){
+    const tf=P.find(p=>p.project==='腾飞中新里');
+    items=[
+      {t:'严重',c:'sev',b:`腾飞中新里：签约${tf?.qy_units}套 vs 认购${tf?.rg_units}套，签约>认购（倒挂），认购转签约率 ${(tf?.rg_to_qy_rate*100).toFixed(1)}%，需核实数据口径`},
+      {t:'严重',c:'sev',b:`凯德·淮海壹号：来访165人次但认购-6套、签约仅2套，来访转认购率 -3.8%，项目吸引力或定位存在严重问题`},
+      {t:'严重',c:'sev',b:`山海连城：目标 ${fmt(P.find(p=>p.project==='山海连城')?.tgt_qy_amount||0)}，签约仅 ${fmt(P.find(p=>p.project==='山海连城')?.qy_amount||0)}，达成率 ${(P.find(p=>p.project==='山海连城')?.qy_achievement*100).toFixed(1)}%，Gap 巨大`},
+      {t:'预警',c:'wrn',b:`凯荔花园：认购转签约率 ${(P.find(p=>p.project==='凯荔花园')?.rg_to_qy_rate*100).toFixed(1)}%（去年同期 ${(P.find(p=>p.project==='凯荔花园')?.rg_to_qy_rate_ly*100).toFixed(1)}%），大幅下滑，签约流程存在瓶颈`},
+      {t:'预警',c:'wrn',b:`11个项目全年零活动（零来访/零认购/零签约），占比38%，资源分配严重不均`},
+      {t:'拐点',c:'info',b:`3月单月新增签约 ${fmt(M[2].qy-M[1].qy)} vs 2月新增 ${fmt(M[1].qy-M[0].qy)}，3月环比${((M[2].qy-M[1].qy)/(M[1].qy-M[0].qy)*100-100).toFixed(1)}%，趋势${((M[2].qy-M[1].qy)/(M[1].qy-M[0].qy)-1)>=0?'加速':'减速'}`},
+      {t:'拐点',c:'info',b:`来访转认购率同比：御锦城从 ${(P.find(p=>p.project==='御锦城')?.visit_to_rg_rate_ly*100).toFixed(1)}%→${(P.find(p=>p.project==='御锦城')?.visit_to_rg_rate*100).toFixed(1)}% 大幅提升`},
+    ];
+  } else {
+    const d=P.find(x=>x.project===curProj);
+    if(!d)return;
+    if(d.rg_units>d.qy_units)items.push({t:'严重',c:'sev',b:`签约(${d.qy_units}套) < 认购(${d.rg_units}套)，认购转签约率异常低至 ${(d.rg_to_qy_rate*100).toFixed(1)}%`});
+    if(d.rg_to_qy_rate<0.4&&d.rg_units>0)items.push({t:'严重',c:'sev',b:`认购转签约率仅 ${(d.rg_to_qy_rate*100).toFixed(1)}%（去年同期 ${(d.rg_to_qy_rate_ly*100).toFixed(1)}%），${d.rg_to_qy_rate<d.rg_to_qy_rate_ly?'同比下滑':'持续低位'}`});
+    if(d.qy_achievement<0.5&&d.tgt_qy_amount>0)items.push({t:'严重',c:'sev',b:`目标达成率仅 ${(d.qy_achievement*100).toFixed(1)}%，缺口 ${fmt(d.tgt_qy_amount-d.qy_amount)}`});
+    if(d.visits===0&&d.qy_amount>0)items.push({t:'预警',c:'wrn',b:`无来访数据但有签约 ${fmt(d.qy_amount)}，数据来源需核实`});
+    if(d.collection_ratio<0.6&&d.qy_amount>0)items.push({t:'预警',c:'wrn',b:`回款率仅 ${(d.collection_ratio*100).toFixed(1)}%，应收未回款 ${fmt(d.unpaid)}`});
+    if(d.price_yoy<-0.1)items.push({t:'拐点',c:'info',b:`签约均价同比下降 ${(Math.abs(d.price_yoy)*100).toFixed(1)}%，价格下行压力明显`});
+    if(d.visits>100&&d.visit_to_rg_rate<0.05)items.push({t:'拐点',c:'info',b:`来访${d.visits}人次但认购转来访率仅 ${(d.visit_to_rg_rate*100).toFixed(1)}%，转化漏斗在来访→认购层断裂`});
+    if(items.length===0)items.push({t:'正常',c:'info',b:`${d.project} 各项指标运行正常，无明显异常`});
+  }
+  // LLM analysis override for anomalies
+  let anomItems = items;
+  if(USE_LLM && LLM.anomalies) {
+    anomItems = LLM.anomalies.split('\n').filter(l=>l.trim()).map(l=>({t:'异常',c:'sev',b:l}));
+  }
+  document.getElementById('anomBox').innerHTML=anomItems.map(i=>`<div class="ai ${i.c}"><span class="at">${i.t}</span><span class="ab">${i.b}</span></div>`).join('');
+}
 
-            let leakage = [];
-            if(fd.diagnosis && Array.isArray(fd.diagnosis.leakage)) {
-                leakage = fd.diagnosis.leakage;
-            }
+// ============ SO WHAT ============
+function renderSoWhat(d){
+  let items=[];
+  const yoyQyFull=T.q1_2025_qy?(T.qy_amount-T.q1_2025_qy)/T.q1_2025_qy:0;
+  const yoyShFull=T.q1_2025_sh?(T.sh_amount-T.q1_2025_sh)/T.q1_2025_sh:0;
+  const yoyUnFull=T.q1_2025_units?(T.qy_units-T.q1_2025_units)/T.q1_2025_units:0;
+  const volC=Math.abs(yoyQyFull)/(Math.abs(yoyQyFull)+Math.abs(yoyShFull)+Math.abs(yoyUnFull))*100||33;
+  const priceC=Math.abs(yoyShFull)/(Math.abs(yoyQyFull)+Math.abs(yoyShFull)+Math.abs(yoyUnFull))*100||33;
+  const effC=Math.abs(yoyUnFull)/(Math.abs(yoyQyFull)+Math.abs(yoyShFull)+Math.abs(yoyUnFull))*100||33;
+  const mainC=volC>priceC&&volC>effC?'来访量':priceC>effC?'价格':'效率';
+  const priceDown=P.filter(p=>p.price_yoy<0).length/(P.filter(p=>p.qy_amount>0).length||1)*100;
+  const effDown=P.filter(p=>p.rg_to_qy_rate<(p.rg_to_qy_rate_ly||1)).length/(P.filter(p=>p.rg_to_qy_rate>0&&p.rg_to_qy_rate_ly>0).length||1)*100;
 
-            let leakHtml = '';
-            leakage.forEach(l => {
-                leakHtml += `<div class="mb-2"><b>${l.label || '-'}</b>：${l.desc || '无说明'}</div>`;
-            });
+  if(d===T){
+    items=[
+      `<strong style="color:var(--red)">🔴 主要矛盾：${mainC}维度</strong> — 来访量同比下滑 ${(Math.abs(yoyQyFull)*100).toFixed(1)}%，${mainC=='来访量'?'是签约下滑的核心驱动因素（L5→L1传导链断裂）':'下降导致总盘子缩小'}`,
+      `量 vs 价 vs 效率：量（来访↓${(Math.abs(yoyQyFull)*100).toFixed(1)}%）> 价（${priceDown.toFixed(0)}%的项目均价同比下降）> 效率（${effDown.toFixed(0)}%的项目转化率同比下滑）`,
+      `签约缺口 ${fmt(T.tgt_qy_amount-T.qy_amount)} 归因分解：约 ${volC.toFixed(0)}%归因于来访不足，${priceC.toFixed(0)}%归因于价格下行，${effC.toFixed(0)}%归因于转化效率下降`,
+      `回款质量分化：凯荔花园回款率仅26.5%、荔水芳洲34.8%、山海连城48.6%，三个项目应收未回款占比高，现金流压力显著`,
+      `TOP3项目贡献 ${(P.filter(p=>p.qy_amount>0).sort((a,b)=>b.qy_amount-a.qy_amount).slice(0,3).reduce((s,p)=>s+p.qy_amount,0)/T.qy_amount*100).toFixed(1)}% 签约额，"二八定律"明显，尾部项目拖累整体目标达成`,
+    ];
+  } else {
+    const mainIssue=d.qy_achievement<0.5?'目标达成严重不足':d.collection_ratio<0.7?'回款率偏低':d.visit_to_rg_rate<0.05?'来访转化不足':'综合表现待提升';
+    items=[
+      `<strong>${d.project}</strong> 的核心矛盾：<span style="color:var(--red)">${mainIssue}</span>`,
+      `达成率 ${(d.qy_achievement*100).toFixed(1)}%，${d.qy_achievement<0.6?'低于60%安全线，需紧急干预':'在可控范围但仍需关注'}`,
+      `量价效分析：来访${fmtN(d.visits)}人次(${d.visits_yoy>=0?'↑':'↓'}${(Math.abs(d.visits_yoy)*100).toFixed(1)}%) | 均价¥${d.price.toFixed(0)}/㎡(${d.price_yoy>=0?'↑':'↓'}${(Math.abs(d.price_yoy)*100).toFixed(1)}%) | 转化率${(d.rg_to_qy_rate*100).toFixed(1)}%(vs去年${(d.rg_to_qy_rate_ly*100).toFixed(1)}%)`,
+      `回款健康度：回款率 ${(d.collection_ratio*100).toFixed(1)}% ${d.collection_ratio>=0.9?'✅ 健康':d.collection_ratio>=0.7?'⚠️ 可接受':'🔴 偏低'}，应收未回款 ${fmt(d.unpaid)}，${d.unpaid>0?'需关注现金流压力':'无应收压力'}`,
+    ];
+  }
+  // LLM analysis override for So What
+  let sowhatItems = items;
+  if(USE_LLM && LLM.sowhat) {
+    sowhatItems = LLM.sowhat.split('\n').filter(l=>l.trim());
+  }
+  document.getElementById('sowhatList').innerHTML=sowhatItems.map(i=>`<li>${i}</li>`).join('');
 
-            let leverage = fd.diagnosis?.leverage || '暂无建议';
-            return `<div><div class="text-red">${leakHtml}</div><div class="mt-4">💡 ${leverage}</div></div>`;
-        }
+  document.getElementById('sowhatCharts').innerHTML=`
+    <div class="cb"><h3>📊 ${d===T?'签约缺口归因分解':'项目量价效分析'}</h3><div class="cc"><canvas id="c5"></canvas></div></div>
+    <div class="cb"><h3>🎯 ${d===T?'项目签约额集中度':'转化率对比（本期vs去年）'}</h3><div class="cc"><canvas id="c6"></canvas></div></div>
+  `;
+}
 
-        window.onload = function() {
-            const yearSel = document.getElementById('yearSelector');
-            Object.keys(db).forEach(y => {
-                const opt = document.createElement('option');
-                opt.value = y;
-                opt.textContent = y + '年';
-                yearSel.appendChild(opt);
-            });
-            yearSel.onchange();
-        }
-    </script>
+// ============ NOW WHAT ============
+function renderNowWhat(d){
+  let actions=[];
+  if(d===T){
+    actions=[
+      {pri:'h',title:'🚨 来访量提升专项行动（方向级）',desc:'全渠道获客：线上投放+线下活动+老带新，月均来访从772提升至1,500+人次',mt:'KPI：来访≥1,500/月 | 点击转来访率≥5% | 单客成本≤¥500'},
+      {pri:'h',title:'📉 价格策略复盘（方向级）',desc:`对${P.filter(p=>p.price_yoy<-0.15).length}个均价降幅超15%的项目复盘，评估"以价换量"弹性`,mt:'KPI：价量弹性模型 | 降价项目签约量环比≥+20% | 均价跌幅≤5%'},
+      {pri:'h',title:'🗑️ 11个停滞项目快速决策（方向级）',desc:'尾盘清盘→整合并入→战略关停，释放管理资源',mt:'KPI：Q2完成决策 | 释放预算≥¥500万/季 | 人员配置率≥80%'},
+      {pri:'m',title:'🔧 认购→签约流程优化（策略级）',desc:'针对凯荔花园(34.1%)、腾飞中新里(6.7%)等低转化项目优化流程',mt:'KPI：认购转签约≥60% | 转化中位数≤14天 | 流失率≤20%'},
+      {pri:'m',title:'💰 凯荔花园回款攻坚（策略级）',desc:'回款率仅26.5%，应收¥4474万未回，成立专项小组催收',mt:'KPI：回款率≥80% | 应收≤¥2000万 | 月回款≥¥500万'},
+      {pri:'m',title:'📊 L1-L5周度监控体系（策略级）',desc:'五维公式链纳入周度看板，红黄绿灯预警',mt:'KPI：周度覆盖100% | 预警响应≤24h | 月度环比改善≥5%'},
+      {pri:'l',title:'🎯 TOP项目资源倾斜（策略级）',desc:'凯德九章、璟高府增加营销预算20%，放大优势',mt:'KPI：TOP项目签约额环比≥+15% | 人均≥5套/月 | ROI≥3:1'},
+      {pri:'l',title:'📱 线上获客渠道建设（策略级）',desc:'当前点击量为零，建立线上获客漏斗，补全L5数据',mt:'KPI：月点击≥10,000 | 点击转来访≥5% | 线上获客≥30%'},
+    ];
+  } else {
+    if(d.qy_achievement<0.5)actions.push({pri:'h',title:`🚨 ${d.project} 目标达成专项（方向级）`,desc:`达成率仅${(d.qy_achievement*100).toFixed(0)}%，缺口${fmt(d.tgt_qy_amount-d.qy_amount)}，需专项策略提升签约量`,mt:`KPI：Q2达成率提升至≥60% | 月均新增签约≥${((d.tgt_qy_amount-d.qy_amount)/9).toFixed(0)}万`});
+    if(d.visit_to_rg_rate<0.1&&d.visits>0)actions.push({pri:'h',title:'🔧 转化能力专项（策略级）',desc:`来访${d.visits}人次但转化仅${(d.visit_to_rg_rate*100).toFixed(1)}%，案场能力需提升`,mt:`KPI：来访转认购≥${(d.visit_to_rg_rate*100+5).toFixed(0)}% | 转化天数≤${Math.max(7,(d.visit_to_rg_days||14)-3)}天`});
+    if(d.collection_ratio<0.7)actions.push({pri:'h',title:'💰 回款攻坚（策略级）',desc:`回款率仅${(d.collection_ratio*100).toFixed(0)}%，应收${fmt(d.unpaid)}`,mt:`KPI：回款率≥80% | 应收≤¥${Math.max(500,(d.unpaid/1e4)*0.3).toFixed(0)}万`});
+    if(d.price_yoy<-0.1)actions.push({pri:'m',title:'📉 价格策略调整（策略级）',desc:`均价同比下降${(Math.abs(d.price_yoy)*100).toFixed(1)}%，评估是否触底`,mt:`KPI：均价跌幅收窄至≤5% | 价量弹性≥1`});
+    if(d.visits===0)actions.push({pri:'h',title:'📱 拓客启动（方向级）',desc:'当前无来访数据，需立即启动拓客计划',mt:`KPI：月来访≥300人次 | 线上获客渠道上线`});
+    if(actions.length===0)actions.push({pri:'l',title:'✅ 维持运营',desc:`${d.project}运行正常，保持现有策略，关注边际改善机会`,mt:'KPI：签约额环比≥+5% | 回款率维持≥90%'});
+  }
+  // LLM analysis override for Now What
+  let actionItems = actions;
+  if(USE_LLM && LLM.nowwhat) {
+    actionItems = LLM.nowwhat.split('\n').filter(l=>l.trim()).map((l,i)=>({
+      pri: i<3?'m':'l',
+      title: l.substring(0, 40) + '...',
+      desc: l
+    }));
+  }
+  document.getElementById('actionBox').innerHTML=actionItems.map(a=>`
+    <div class="ac">
+      <h3>${a.title} <span class="pri ${a.pri}">${a.pri=='h'?'高优':a.pri=='m'?'中优':'低优'}</span></h3>
+      <p>${a.desc}</p>
+      <div class="mt">📌 ${a.mt}</div>
+    </div>
+  `).join('');
+}
+
+// ============ TABLE ============
+function renderTable(d){
+  const items=d===T?P.sort((a,b)=>b.qy_amount-a.qy_amount):[d];
+  let html='<table><thead><tr><th>项目</th><th>签约(万)</th><th>实收(万)</th><th>达成率</th><th>套数</th><th>面积(㎡)</th><th>来访</th><th>认购</th><th>回款率</th><th>认购转签约</th><th>来访转认购</th><th>均价同比</th><th>应收未回(万)</th></tr></thead><tbody>';
+  items.forEach(p=>{
+    html+=`<tr><td>${p.project}</td><td>${(p.qy_amount/1e4).toFixed(0)}</td><td>${(p.sh_amount/1e4).toFixed(0)}</td><td class="${p.qy_achievement>=1?'po':'ne'}">${(p.qy_achievement*100).toFixed(1)}%</td><td>${p.qy_units}</td><td>${p.area.toFixed(1)}</td><td>${p.visits}</td><td>${p.rg_units}</td><td class="${p.collection_ratio>=0.9?'po':'ne'}">${(p.collection_ratio*100).toFixed(1)}%</td><td>${(p.rg_to_qy_rate*100).toFixed(1)}%</td><td>${(p.visit_to_rg_rate*100).toFixed(1)}%</td><td class="${p.price_yoy>=0?'po':'ne'}">${(p.price_yoy*100).toFixed(1)}%</td><td>${(p.unpaid/1e4).toFixed(0)}</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('tableBox').innerHTML=html;
+}
+
+// ============ CHARTS ============
+function initCharts(){
+  Object.values(charts).forEach(c=>c.destroy());charts={};
+  Chart.defaults.color='#8b8fa3';Chart.defaults.borderColor='#2a2e3a';
+  const d=getData();
+
+  // c1: trend
+  charts.c1=new Chart(document.getElementById('c1'),{type:'line',data:{
+    labels:M.map(m=>m.date),
+    datasets:[
+      {label:'签约金额(万)',data:M.map(m=>m.qy/1e4),borderColor:'#6c5ce7',backgroundColor:'rgba(108,92,231,.1)',fill:true,tension:.3,pointRadius:5},
+      {label:'实收金额(万)',data:M.map(m=>m.sh/1e4),borderColor:'#00b894',backgroundColor:'rgba(0,184,148,.1)',fill:true,tension:.3,pointRadius:5},
+      {label:'目标(万)',data:M.map(m=>m.tgt/1e4),borderColor:'#e17055',borderDash:[5,5],fill:false,tension:0,pointRadius:3}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3',font:{size:11}}}},scales:{y:{title:{display:true,text:'万元',color:'#8b8fa3'}}}}});
+
+  // c2: context-dependent comparison
+  if(curView==='mgmt'){
+    if(d===T){
+      // All projects: achievement rate ranking
+      const top=[...P].filter(p=>p.qy_amount>0).sort((a,b)=>b.qy_amount-a.qy_amount).slice(0,10);
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:top.map(p=>p.project),
+        datasets:[{label:'目标达成率(%)',data:top.map(p=>p.qy_achievement*100),backgroundColor:top.map(p=>p.qy_achievement>=1?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)'),borderRadius:4}]
+    },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'对标：目标达成率',color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    } else {
+      // Single project: monthly trend for key metrics
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:['签约达成率','回款率','认转签率','来转认率'],
+        datasets:[{label:'实际值(%)',data:[d.qy_achievement*100,d.collection_ratio*100,d.rg_to_qy_rate*100,d.visit_to_rg_rate*100],
+          backgroundColor:[d.qy_achievement>=0.9?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.collection_ratio>=0.9?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.rg_to_qy_rate>=0.7?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.visit_to_rg_rate>=0.1?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)'],borderRadius:4}]
+      },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:`${d.project}：核心效率指标`,color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    }
+  } else if(curView==='health'){
+    if(d===T){
+      // All projects: collection rate ranking
+      const top=[...P].filter(p=>p.qy_amount>0).sort((a,b)=>b.collection_ratio-a.collection_ratio).slice(0,10);
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:top.map(p=>p.project),
+        datasets:[{label:'回款率(%)',data:top.map(p=>p.collection_ratio*100),backgroundColor:top.map(p=>p.collection_ratio>=0.9?'rgba(0,184,148,.7)':'rgba(253,203,110,.7)'),borderRadius:4}]
+    },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'对标：回款率健康度',color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    } else {
+      // Single project: collection rate trend and breakdown
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:['回款率','应收未回款率','认转签率','来转认率'],
+        datasets:[{label:'实际值(%)',data:[d.collection_ratio*100,d.unpaid_rate*100,d.rg_to_qy_rate*100,d.visit_to_rg_rate*100],
+          backgroundColor:[d.collection_ratio>=0.9?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.unpaid_rate<0.1?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.rg_to_qy_rate>=0.7?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.visit_to_rg_rate>=0.1?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)'],borderRadius:4}]
+      },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:`${d.project}：健康度指标`,color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    }
+  } else {
+    if(d===T){
+      // All projects: YoY ranking
+      const yoyData=P.filter(p=>p.visits_yoy!==0||p.price_yoy!==0).sort((a,b)=>a.visits_yoy-b.visits_yoy).slice(0,10);
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:yoyData.map(p=>p.project),
+        datasets:[{label:'来访同比(%)',data:yoyData.map(p=>p.visits_yoy*100),backgroundColor:yoyData.map(p=>p.visits_yoy>=0?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)'),borderRadius:4}]
+    },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'对标：来访量同比',color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    } else {
+      // Single project: YoY comparison
+      charts.c2=new Chart(document.getElementById('c2'),{type:'bar',data:{
+        labels:['来访同比','均价同比'],
+        datasets:[{label:'YoY(%)',data:[d.visits_yoy*100,d.price_yoy*100],
+          backgroundColor:[d.visits_yoy>=0?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)',d.price_yoy>=0?'rgba(0,184,148,.7)':'rgba(225,112,85,.7)'],borderRadius:4}]
+      },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:`${d.project}：同比变化`,color:'#8b8fa3'}},scales:{x:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+    }
+  }
+
+  // c3: funnel
+  charts.c3=new Chart(document.getElementById('c3'),{type:'bar',data:{
+    labels:['来访人次','认购套数','签约套数'],
+    datasets:[{data:[d.visits,d.rg_units,d.qy_units],backgroundColor:['rgba(9,132,227,.7)','rgba(253,203,110,.7)','rgba(0,184,148,.7)'],borderRadius:6}]
+  },options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{type:'logarithmic',title:{display:true,text:'对数刻度',color:'#8b8fa3'}}}}});
+
+  // c4: YoY
+  const yoyQyF=d===T?(T.q1_2025_qy?(T.qy_amount-T.q1_2025_qy)/T.q1_2025_qy:0):(d.visits_yoy||0);
+  const yoyShF=d===T?(T.q1_2025_sh?(T.sh_amount-T.q1_2025_sh)/T.q1_2025_sh:0):(d.price_yoy||0);
+  const yoyUnF=d===T?(T.q1_2025_units?(T.qy_units-T.q1_2025_units)/T.q1_2025_units:0):0;
+  const yoyViF=d===T?(T.q1_2025_visits?(T.visits-T.q1_2025_visits)/T.q1_2025_visits:0):(d.visits_yoy||0);
+  charts.c4=new Chart(document.getElementById('c4'),{type:'bar',data:{
+    labels:['签约金额','实收金额','签约套数','来访人次'],
+    datasets:[{label:'YoY(%)',data:[yoyQyF*100,yoyShF*100,yoyUnF*100,yoyViF*100],backgroundColor:v=>v.raw<0?'rgba(225,112,85,.7)':'rgba(0,184,148,.7)',borderRadius:6}]
+  },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+
+  // c5 & c6: sowhat charts
+  if(d===T){
+    const volC=Math.abs(yoyViF)/(Math.abs(yoyViF)+Math.abs(yoyShF)+Math.abs(yoyUnF))*100||33;
+    const priceC=Math.abs(yoyShF)/(Math.abs(yoyViF)+Math.abs(yoyShF)+Math.abs(yoyUnF))*100||33;
+    const effC=Math.abs(yoyUnF)/(Math.abs(yoyViF)+Math.abs(yoyShF)+Math.abs(yoyUnF))*100||33;
+    charts.c5=new Chart(document.getElementById('c5'),{type:'doughnut',data:{
+      labels:['来访量下降','实收下降','套数下降'],
+      datasets:[{data:[volC,priceC,effC],backgroundColor:['rgba(9,132,227,.8)','rgba(225,112,85,.8)','rgba(253,203,110,.8)']}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3'}},title:{display:true,text:`总缺口: ${fmt(T.tgt_qy_amount-T.qy_amount)}`,color:'#e4e6eb',font:{size:14}}}}});
+    const conc=[...P].filter(p=>p.qy_amount>0).sort((a,b)=>b.qy_amount-a.qy_amount);
+    const top5=conc.slice(0,5).reduce((s,p)=>s+p.qy_amount,0)/T.qy_amount*100;
+    charts.c6=new Chart(document.getElementById('c6'),{type:'doughnut',data:{
+      labels:['TOP5项目','其余项目'],
+      datasets:[{data:[top5,100-top5],backgroundColor:['rgba(108,92,231,.8)','rgba(139,143,163,.3)']}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa3'}},title:{display:true,text:`TOP5占比 ${top5.toFixed(1)}%`,color:'#e4e6eb',font:{size:14}}}}});
+  } else {
+    charts.c5=new Chart(document.getElementById('c5'),{type:'bar',data:{
+      labels:['签约金额','实收金额','来访人次'],
+      datasets:[
+        {label:'本期',data:[d.qy_amount/1e4,d.sh_amount/1e4,d.visits],backgroundColor:'rgba(108,92,231,.7)',borderRadius:4},
+      ]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    charts.c6=new Chart(document.getElementById('c6'),{type:'bar',data:{
+      labels:['认购转签约率','来访转认购率'],
+      datasets:[
+        {label:'本期',data:[d.rg_to_qy_rate*100,d.visit_to_rg_rate*100],backgroundColor:'rgba(108,92,231,.7)',borderRadius:4},
+        {label:'去年同期',data:[d.rg_to_qy_rate_ly*100,d.visit_to_rg_rate_ly*100],backgroundColor:'rgba(139,143,163,.5)',borderRadius:4},
+      ]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#8b8fa3'}}},scales:{y:{title:{display:true,text:'%',color:'#8b8fa3'}}}}});
+  }
+}
+
+// ============ APPLY ALL ============
+function applyAll(){
+  curView=document.getElementById('viewF').value;
+  curProj=document.getElementById('projF').value;
+  const d=getData();
+  renderOverview();
+  renderKPIs(d);
+  renderWhat(d);
+  renderChain(d);
+  renderAnomalies();
+  renderSoWhat(d);
+  renderNowWhat(d);
+  renderTable(d);
+  setTimeout(initCharts,100);
+}
+// ============ INIT ============
+applyAll();
+</script>
 </body>
 </html>
