@@ -77,17 +77,9 @@ with st.sidebar:
         value=DEFAULT_MODEL,
         help="默认 qwen-plus（qwen3.6），也可用 qwen-turbo 等"
     )
-    
-    st.divider()
-    
-    # 模板路径
-    template_dir = Path(__file__).parent
-    template_file = st.text_input(
-        "模板文件",
-        value=str(template_dir / "dashboard_template.html"),
-        help="HTML模板文件路径"
-    )
-    st.caption("模板应包含 `{{DATA_JSON}}` 和 `{{LLM_ANALYSIS}}` 占位符")
+
+# 模板路径（固定）
+TEMPLATE_PATH = Path(__file__).parent / "template.html"
 
 # ============ Session State 初始化 ============
 if 'data' not in st.session_state:
@@ -209,13 +201,7 @@ if st.session_state.get('processed'):
         
         with st.spinner("正在渲染仪表盘..."):
             try:
-                template_path = template_file
-                if not os.path.exists(template_path):
-                    st.error(f"❌ 模板文件不存在: {template_path}")
-                    st.stop()
-                
-                # 读取模板
-                with open(template_path, 'r', encoding='utf-8') as f:
+                with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
                     template = f.read()
                 
                 # 替换数据占位符
