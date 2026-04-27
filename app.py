@@ -214,21 +214,24 @@ if st.session_state.get('processed'):
                 
                 # 替换数据占位符（使用 Base64）
                 data_b64 = encode_json(data)
-                rendered = template.replace('{{DATA_JSON}}', data_b64)
-                # 修改模板中的解析方式
-                rendered = rendered.replace(
+                # 先修改模板中的解析方式
+                rendered = template.replace(
                     "const DATA=JSON.parse('{{DATA_JSON}}');",
                     "const DATA=JSON.parse(atob('{{DATA_JSON}}'));"
                 )
+                # 再替换数据占位符
+                rendered = rendered.replace('{{DATA_JSON}}', data_b64)
                 
                 # 替换 LLM 分析占位符
                 if analysis:
                     analysis_b64 = encode_json(analysis)
-                    rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_b64)
+                    # 先修改模板中的解析方式
                     rendered = rendered.replace(
                         "const LLM=JSON.parse('{{LLM_ANALYSIS}}');",
                         "const LLM=JSON.parse(atob('{{LLM_ANALYSIS}}'));"
                     )
+                    # 再替换数据占位符
+                    rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_b64)
                     # 启用 LLM 模式标志
                     rendered = rendered.replace('const USE_LLM=false', 'const USE_LLM=true')
                 else:
