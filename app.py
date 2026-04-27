@@ -204,23 +204,31 @@ if st.session_state.get('processed'):
                 with open(TEMPLATE_PATH, 'r', encoding='utf-8') as f:
                     template = f.read()
                 
-                # 清理 JSON 字符串
-                def clean_json(obj):
+                # 处理 JSON：使用 Base64 编码避免特殊字符问题
+                def encode_json(obj):
                     json_str = json.dumps(obj, ensure_ascii=False)
-                    # 处理 NaN 和 Infinity - JavaScript JSON.parse 不支持这些值
+                    # 处理 NaN 和 Infinity
                     json_str = json_str.replace('NaN', 'null').replace('Infinity', 'null').replace('-Infinity', 'null')
-                    # 转义换行符为 \\n，防止 JavaScript 解析错误
-                    json_str = json_str.replace('\n', '\\n').replace('\r', '\\r')
-                    return json_str
+                    import base64
+                    return base64.b64encode(json_str.encode('utf-8')).decode('ascii')
                 
-                # 替换数据占位符
-                data_json = clean_json(data)
-                rendered = template.replace('{{DATA_JSON}}', data_json)
+                # 替换数据占位符（使用 Base64）
+                data_b64 = encode_json(data)
+                rendered = template.replace('{{DATA_JSON}}', data_b64)
+                # 修改模板中的解析方式
+                rendered = rendered.replace(
+                    "const DATA=JSON.parse('{{DATA_JSON}}');",
+                    "const DATA=JSON.parse(atob('{{DATA_JSON}}'));"
+                )
                 
                 # 替换 LLM 分析占位符
                 if analysis:
-                    analysis_json = clean_json(analysis)
-                    rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_json)
+                    analysis_b64 = encode_json(analysis)
+                    rendered = rendered.replace('{{LLM_ANALYSIS}}', analysis_b64)
+                    rendered = rendered.replace(
+                        "const LLM=JSON.parse('{{LLM_ANALYSIS}}');",
+                        "const LLM=JSON.parse(atob('{{LLM_ANALYSIS}}'));"
+                    )
                     # 启用 LLM 模式标志
                     rendered = rendered.replace('const USE_LLM=false', 'const USE_LLM=true')
                 else:
